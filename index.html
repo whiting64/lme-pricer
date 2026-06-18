@@ -97,16 +97,6 @@
   .tag.cr{color:var(--call);border-color:rgba(52,211,153,.4);}
   .meta b{color:var(--txt);}
 
-  .chartwrap{padding:8px 6px 4px;}
-  #payoff{width:100%;height:auto;display:block;}
-  #payoffEmpty{color:var(--txt-faint);font-size:12px;text-align:center;padding:34px 0;}
-
-  .copy{margin-top:14px;display:flex;gap:10px;}
-  .copy button{flex:1;background:#0a1119;border:1px solid var(--line);color:var(--txt-dim);
-    font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
-    padding:13px 0;border-radius:6px;cursor:pointer;transition:all .12s;min-height:46px;}
-  .copy button:active{transform:scale(.99);}
-  .copy button.ok{color:var(--cyan);border-color:var(--cyan);background:rgba(34,211,238,.08);}
   .hide{display:none!important;}
   .ratectl{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0 2px;}
   .seg.sm{gap:4px;flex:0 0 auto;}
@@ -263,23 +253,6 @@
         </div>
       </div>
 
-      <!-- payoff -->
-      <div class="panel" style="margin-top:14px;">
-        <div class="panel-h"><span>Payoff at expiry</span><span style="color:var(--txt-faint);">$ / tonne</span></div>
-        <div class="chartwrap">
-          <svg id="payoff" viewBox="0 0 360 210" role="img"></svg>
-          <div id="payoffEmpty">enter contract to view payoff</div>
-        </div>
-      </div>
-
-      <div class="copy" id="copyOutright">
-        <button id="copyCall">Copy Call</button>
-        <button id="copyPut">Copy Put</button>
-      </div>
-      <div class="copy hide" id="copyStructWrap">
-        <button id="copyStruct">Copy Structure Ticket</button>
-      </div>
-
     </div>
   </div>
 </div>
@@ -430,7 +403,7 @@ function runOutright(b){
     document.getElementById("cD1").textContent="—";document.getElementById("cD2").textContent="—";
     document.getElementById("mCall").textContent="—";document.getElementById("mPut").textContent="—";
     document.getElementById("beCall").textContent="—";document.getElementById("bePut").textContent="—";
-    LAST=null;drawPayoff();return;}
+    LAST=null;return;}
 
   var s=sign(), F=b.F, lot=b.lots, ton=b.tonnes;
   var c=priceLeg("C",F,K,vol,b.T,b.df,b.rc,b.rate,ton);
@@ -460,13 +433,7 @@ function runOutright(b){
   document.getElementById("cD1").textContent=c.d1.toFixed(4);
   document.getElementById("cD2").textContent=c.d2.toFixed(4);
 
-  // payoff: two lines
-  var lines=[
-    {fn:function(S){return s*(Math.max(S-K,0)-premC);},color:"#34d399"},
-    {fn:function(S){return s*(Math.max(K-S,0)-premP);},color:"#fb7185"}
-  ];
   LAST={mode:"outright",b,K,vol,c,p,premC,premP,dC,dP,g,vg,th};
-  drawPayoff(lines,[K],F);
 }
 
 function runStruct(b){
@@ -483,7 +450,7 @@ function runStruct(b){
   else{for(var i=1;i<=cfg.n;i++){Vs[i]=fnum("v"+i);if(!(Vs[i]>0))ok=false;}}
   if(!ok){dashTable(sBody,1);clearGVColors(sBody,1);
     document.getElementById("netTag").textContent="—";document.getElementById("netTag").className="tag";
-    document.getElementById("beStruct").textContent="—";LAST=null;drawPayoff();return;}
+    document.getElementById("beStruct").textContent="—";LAST=null;return;}
 
   var s=sign(),F=b.F,lot=b.lots,ton=b.tonnes;
   var premT=0,dl=0,gm=0,vg=0,th=0,strikes=[];
@@ -516,91 +483,18 @@ function runStruct(b){
     pay+=L.q*(L.cp==="C"?Math.max(S-Ks[L.k],0):Math.max(Ks[L.k]-S,0));});
     return s*(pay-premT);};
   LAST={mode:"struct",b,cfg,legsDef,Ks,Vs,premT,dl,gm,vg,th,strikes,netFn};
-  var bes=drawPayoff([{fn:netFn,color:"#22d3ee"}],strikes,F);
+  var bes=findBEs(netFn,strikes.concat([F]));
   document.getElementById("beStruct").textContent=bes.length?bes.map(function(x){return num(x,0);}).join(" / "):"—";
 }
 
-/* ============================================================
-   PAYOFF CHART (inline SVG, no lib)
-   returns breakevens of the LAST line drawn
-   ============================================================ */
-function drawPayoff(lines,strikes,F){return drawChart("payoff","payoffEmpty",lines,strikes,F);}
-function drawChart(svgId,emptyId,lines,strikes,F){
-  var svg=document.getElementById(svgId),empty=document.getElementById(emptyId);
-  if(!lines){svg.innerHTML="";empty.style.display="block";return [];}
-  empty.style.display="none";
-  var W=360,H=210,padL=12,padR=12,padT=12,padB=22;
-  var marks=strikes.concat([F]);
-  var lo=Math.min.apply(null,marks)*0.80, hi=Math.max.apply(null,marks)*1.20;
-  var N=120, xs=[]; for(var i=0;i<=N;i++)xs.push(lo+(hi-lo)*i/N);
-
-  var series=lines.map(function(ln){return xs.map(function(S){return [S,ln.fn(S)];});});
-  var ally=[]; series.forEach(function(p){p.forEach(function(q){ally.push(q[1]);});});
-  var ymin=Math.min.apply(null,ally), ymax=Math.max.apply(null,ally);
-  if(ymin===ymax){ymin-=1;ymax+=1;}
-  var pad=(ymax-ymin)*0.14; ymin-=pad; ymax+=pad;
-
-  function X(S){return padL+(S-lo)/(hi-lo)*(W-padL-padR);}
-  function Y(v){return padT+(ymax-v)/(ymax-ymin)*(H-padT-padB);}
-
-  var g="";
-  // zero line
-  var y0=Y(0);
-  g+='<line x1="'+padL+'" y1="'+y0+'" x2="'+(W-padR)+'" y2="'+y0+'" stroke="#2a3a4d" stroke-width="1" stroke-dasharray="3 3"/>';
-  // strike guides
-  strikes.forEach(function(k){var x=X(k);
-    g+='<line x1="'+x+'" y1="'+padT+'" x2="'+x+'" y2="'+(H-padB)+'" stroke="#1e2a3a" stroke-width="1"/>';
-    g+='<text x="'+x+'" y="'+(H-7)+'" fill="#6b7a8d" font-size="9" text-anchor="middle" font-family="monospace">'+Math.round(k)+'</text>';});
-  // forward guide
-  var xf=X(F);
-  g+='<line x1="'+xf+'" y1="'+padT+'" x2="'+xf+'" y2="'+(H-padB)+'" stroke="#0e7490" stroke-width="1" stroke-dasharray="2 3"/>';
-  g+='<text x="'+xf+'" y="'+(padT+8)+'" fill="#22d3ee" font-size="9" text-anchor="middle" font-family="monospace">F</text>';
-  // lines
-  series.forEach(function(pts,idx){
-    var d=pts.map(function(q,j){return (j?"L":"M")+X(q[0]).toFixed(1)+" "+Y(q[1]).toFixed(1);}).join(" ");
-    g+='<path d="'+d+'" fill="none" stroke="'+lines[idx].color+'" stroke-width="2"/>';
-  });
-  // breakevens of last line
-  var last=series[series.length-1], bes=[];
-  for(var j=1;j<last.length;j++){var a=last[j-1],bb=last[j];
-    if((a[1]<0&&bb[1]>=0)||(a[1]>0&&bb[1]<=0)){var x=a[0]+(bb[0]-a[0])*(0-a[1])/(bb[1]-a[1]);bes.push(x);
-      g+='<circle cx="'+X(x).toFixed(1)+'" cy="'+y0.toFixed(1)+'" r="3" fill="#fbbf24"/>';}}
-
-  svg.innerHTML=g;
+/* zero-crossing finder for structure breakevens */
+function findBEs(fn,marks){
+  var lo=Math.min.apply(null,marks)*0.80,hi=Math.max.apply(null,marks)*1.20,N=120,xs=[],bes=[];
+  for(var i=0;i<=N;i++)xs.push(lo+(hi-lo)*i/N);
+  for(var j=1;j<xs.length;j++){var a=xs[j-1],b=xs[j],fa=fn(a),fb=fn(b);
+    if((fa<0&&fb>=0)||(fa>0&&fb<=0))bes.push(a+(b-a)*(0-fa)/(fb-fa));}
   return bes;
 }
-
-/* ============================================================
-   TICKETS
-   ============================================================ */
-function metalMonth(){
-  var metal=document.querySelector("#metalSeg button.on").dataset.m;
-  var mv=$v("month"); return {metal:metal,month:mv.slice(0,3)+mv.slice(-2)};
-}
-function ticketOutright(cp){
-  if(!LAST||LAST.mode!=="outright")return null;
-  var L=LAST,mm=metalMonth(),s=sign(),isC=cp==="C";
-  var premT=isC?L.premC:L.premP, dlt=isC?L.dC:L.dP;
-  return SIDE.toUpperCase()+" "+mm.metal+" "+mm.month+" "+L.K+(isC?"C":"P")+" | F "+L.b.F+" v "+L.vol+
-    " | prem "+num(-s*premT,2)+"/t = "+money(-s*premT*L.b.tonnes*L.b.lots)+" ("+L.b.lots+" lot)"+
-    " | \u0394 "+num(dlt*s,2)+" \u0393 "+num(L.g*s,4)+" V "+num(L.vg*s,1)+" \u0398 "+num(L.th*s,1);
-}
-function ticketStruct(){
-  if(!LAST||LAST.mode!=="struct")return null;
-  var L=LAST,mm=metalMonth(),s=sign();
-  var legStr=L.legsDef.map(function(le){return (le.q>0?"+":"")+le.q+"x"+L.Ks[le.k]+le.cp;}).join(" ");
-  var cf=-s*L.premT;
-  return SIDE.toUpperCase()+" "+mm.metal+" "+mm.month+" "+L.cfg.title.toUpperCase()+
-    " | "+legStr+" | F "+L.b.F+
-    " | "+(cf<0?"debit ":"credit ")+num(Math.abs(cf),2)+"/t = "+money(cf*L.b.tonnes*L.b.lots)+" ("+L.b.lots+" lot)"+
-    " | \u0394 "+num(L.dl*s,2)+" \u0393 "+num(L.gm*s,4)+" V "+num(L.vg*s,1)+" \u0398 "+num(L.th*s,1);
-}
-function copy(text,btn,label){
-  if(!text)return;
-  var done=function(){btn.classList.add("ok");var o=btn.textContent;btn.textContent="Copied";setTimeout(function(){btn.classList.remove("ok");btn.textContent=label;},1200);};
-  try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done,function(){fb(text,done);});}else fb(text,done);}catch(e){fb(text,done);}
-}
-function fb(text,done){try{var t=document.createElement("textarea");t.value=text;t.style.position="fixed";t.style.opacity="0";document.body.appendChild(t);t.focus();t.select();document.execCommand("copy");document.body.removeChild(t);done();}catch(e){}}
 
 /* ============================================================
    STRUCTURE / SIDE / CP SWITCHING
@@ -624,8 +518,6 @@ function setStruct(x,fire){
   var out=(x==="outright");
   document.getElementById("resOutright").classList.toggle("hide",!out);
   document.getElementById("resStruct").classList.toggle("hide",out);
-  document.getElementById("copyOutright").classList.toggle("hide",!out);
-  document.getElementById("copyStructWrap").classList.toggle("hide",out);
   document.getElementById("structTitle").textContent=cfg.title;
   applyVolFields(cfg);
   if(fire){run();save();}
@@ -700,10 +592,6 @@ var timer=null;
 IDS.forEach(function(id){var e=document.getElementById(id);
   var h=function(){clearTimeout(timer);timer=setTimeout(function(){run();save();},120);};
   e.addEventListener("input",h);e.addEventListener("change",h);});
-
-document.getElementById("copyCall").addEventListener("click",function(e){copy(ticketOutright("C"),e.currentTarget,"Copy Call");});
-document.getElementById("copyPut").addEventListener("click",function(e){copy(ticketOutright("P"),e.currentTarget,"Copy Put");});
-document.getElementById("copyStruct").addEventListener("click",function(e){copy(ticketStruct(),e.currentTarget,"Copy Structure Ticket");});
 
 load();
 run();
