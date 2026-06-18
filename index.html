@@ -340,6 +340,7 @@ function money(n){return (n<0?"-$":"$")+Math.abs(n).toLocaleString("en-US",{maxi
 /* red when you pay / lose (negative), green when you receive / gain (positive) */
 function col(v,dp){return '<span style="color:'+(v<0?"var(--put)":"var(--call)")+'">'+num(v,dp)+'</span>';}
 function colM(v){return '<span style="color:'+(v<0?"var(--put)":"var(--call)")+'">'+money(v)+'</span>';}
+function colCR(v){var c=v<0?"var(--put)":"var(--call)";return '<span style="color:'+c+'">'+(v<0?"Cost ":"Rcv ")+money(Math.abs(v))+'</span>';}
 /* directly colour gamma/vega tds, bypassing any CSS class colour on the td */
 function setGVColors(body,ncols,gc,vc){
   var rows=body.querySelectorAll("tr");
@@ -439,11 +440,12 @@ function runOutright(b){
   // per-tonne premium: call green / put red (column colour, as before)
   setRow(oBody,0,[num(premC*s,2),num(premP*s,2)]);
   // total premium: cash flow — pay = negative/red, receive = positive/green
-  setRow(oBody,1,[colM(-s*premC*ton*lot),colM(-s*premP*ton*lot)]);
+  setRow(oBody,1,[colCR(-s*premC*ton*lot),colCR(-s*premP*ton*lot)]);
   setRow(oBody,2,[num(dC*s,3),num(dP*s,3)]);
   setRow(oBody,3,[num(g*s,4),num(g*s,4)]);
   setRow(oBody,4,[num(vg*s,2),num(vg*s,2)]);
-  setGVColors(oBody,2,SIDE==="buy"?"var(--call)":"var(--put)",(vg*s>=0)?"var(--call)":"var(--put)");
+  var sc=SIDE==="buy"?"var(--call)":"var(--put)";
+  setGVColors(oBody,2,sc,sc);
   // theta: long = negative/red (decay cost), short = positive/green
   setRow(oBody,5,[col(lot*c.thetaUnit*s,2),col(lot*p.thetaUnit*s,2)]);
 
@@ -488,11 +490,12 @@ function runStruct(b){
   });
 
   setRow(sBody,0,[num(premT*s,2)]);
-  setRow(sBody,1,[colM(-s*premT*ton*lot)]);
+  setRow(sBody,1,[colCR(-s*premT*ton*lot)]);
   setRow(sBody,2,[num(dl*s,3)]);
   setRow(sBody,3,[num(gm*s,4)]);
   setRow(sBody,4,[num(vg*s,2)]);
-  setGVColors(sBody,1,SIDE==="buy"?"var(--call)":"var(--put)",(vg*s>=0)?"var(--call)":"var(--put)");
+  var sc=SIDE==="buy"?"var(--call)":"var(--put)";
+  setGVColors(sBody,1,sc,sc);
   setRow(sBody,5,[col(th*s,2)]);
 
   // cash flow after side: negative = you pay (debit), positive = you receive (credit)
@@ -512,7 +515,7 @@ function runStruct(b){
 
 /* zero-crossing finder for structure breakevens */
 function findBEs(fn,marks){
-  var lo=Math.min.apply(null,marks)*0.80,hi=Math.max.apply(null,marks)*1.20,N=120,xs=[],bes=[];
+  var lo=Math.min.apply(null,marks)*0.60,hi=Math.max.apply(null,marks)*1.40,N=200,xs=[],bes=[];
   for(var i=0;i<=N;i++)xs.push(lo+(hi-lo)*i/N);
   for(var j=1;j<xs.length;j++){var a=xs[j-1],b=xs[j],fa=fn(a),fb=fn(b);
     if((fa<0&&fb>=0)||(fa>0&&fb<=0))bes.push(a+(b-a)*(0-fa)/(fb-fa));}
