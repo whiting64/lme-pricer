@@ -128,8 +128,8 @@
             <option value="strangle">Strangle</option>
             <option value="callspread">Call spread</option>
             <option value="putspread">Put spread</option>
-            <option value="rr">Risk reversal</option>
-            <option value="collar">Collar</option>
+            <option value="rrbuy">RR  +C / −P</option>
+            <option value="rrsell">RR  −C / +P</option>
             <option value="ratio">1×2 ratio</option>
             <option value="fly">Butterfly</option>
           </select>
@@ -311,11 +311,11 @@ var STRUCTS={
   putspread:{title:"Put spread", cp:false, n:2,
     strikes:[{lbl:"K1 short put",vlbl:"Vol %",cls:"wingp"},{lbl:"K2 long put",vlbl:"Vol %",cls:"wingp"}],
     legs:function(){return [{cp:"P",k:1,q:-1},{cp:"P",k:2,q:1}];}},
-  rr:{title:"Risk reversal", cp:false, n:2,
-    strikes:[{lbl:"Put (sell)",vlbl:"Put vol %",cls:"wingp"},{lbl:"Call (buy)",vlbl:"Call vol %",cls:"wing"}],
+  rrbuy:{title:"RR  +C / −P", cp:false, n:2,
+    strikes:[{lbl:"Put strike",vlbl:"Put vol %",cls:"wingp"},{lbl:"Call strike",vlbl:"Call vol %",cls:"wing"}],
     legs:function(){return [{cp:"P",k:1,q:-1},{cp:"C",k:2,q:1}];}},
-  collar:{title:"Collar", cp:false, n:2,
-    strikes:[{lbl:"Put (buy)",vlbl:"Put vol %",cls:"wingp"},{lbl:"Call (sell)",vlbl:"Call vol %",cls:"wing"}],
+  rrsell:{title:"RR  −C / +P", cp:false, n:2,
+    strikes:[{lbl:"Put strike",vlbl:"Put vol %",cls:"wingp"},{lbl:"Call strike",vlbl:"Call vol %",cls:"wing"}],
     legs:function(){return [{cp:"P",k:1,q:1},{cp:"C",k:2,q:-1}];}},
   ratio:{title:"1×2 ratio", cp:true, n:2,
     strikes:[{lbl:"K1  buy ×1",vlbl:"Vol %"},{lbl:"K2  sell ×2",vlbl:"Vol %"}],
