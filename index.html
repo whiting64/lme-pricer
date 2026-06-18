@@ -338,9 +338,11 @@ function money(n){return (n<0?"-$":"$")+Math.abs(n).toLocaleString("en-US",{maxi
 /* red when you pay / lose (negative), green when you receive / gain (positive) */
 function col(v,dp){return '<span style="color:'+(v<0?"var(--put)":"var(--call)")+'">'+num(v,dp)+'</span>';}
 function colM(v){return '<span style="color:'+(v<0?"var(--put)":"var(--call)")+'">'+money(v)+'</span>';}
-/* directly colour gamma/vega tds by side, bypassing any CSS class colour on the td */
-function setGVColors(body,ncols){var sc=SIDE==="buy"?"var(--call)":"var(--put)";
-  [3,4].forEach(function(ri){var r=body.querySelectorAll("tr")[ri];for(var i=1;i<=ncols;i++)r.children[i].style.color=sc;});}
+/* directly colour gamma/vega tds, bypassing any CSS class colour on the td */
+function setGVColors(body,ncols,gc,vc){
+  var rows=body.querySelectorAll("tr");
+  for(var i=1;i<=ncols;i++){rows[3].children[i].style.color=gc;rows[4].children[i].style.color=vc;}
+}
 function clearGVColors(body,ncols){
   [3,4].forEach(function(ri){var r=body.querySelectorAll("tr")[ri];for(var i=1;i<=ncols;i++)r.children[i].style.color='';});}
 
@@ -439,7 +441,7 @@ function runOutright(b){
   setRow(oBody,2,[num(dC*s,3),num(dP*s,3)]);
   setRow(oBody,3,[num(g*s,4),num(g*s,4)]);
   setRow(oBody,4,[num(vg*s,2),num(vg*s,2)]);
-  setGVColors(oBody,2);
+  setGVColors(oBody,2,SIDE==="buy"?"var(--call)":"var(--put)",(vg*s>=0)?"var(--call)":"var(--put)");
   // theta: long = negative/red (decay cost), short = positive/green
   setRow(oBody,5,[col(th*s,2),col(th*s,2)]);
 
@@ -488,7 +490,7 @@ function runStruct(b){
   setRow(sBody,2,[num(dl*s,3)]);
   setRow(sBody,3,[num(gm*s,4)]);
   setRow(sBody,4,[num(vg*s,2)]);
-  setGVColors(sBody,1);
+  setGVColors(sBody,1,SIDE==="buy"?"var(--call)":"var(--put)",(vg*s>=0)?"var(--call)":"var(--put)");
   setRow(sBody,5,[col(th*s,2)]);
 
   // cash flow after side: negative = you pay (debit), positive = you receive (credit)
