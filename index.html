@@ -289,7 +289,9 @@ function priceLeg(cp,F,K,vol,T,df,rc,rate,tonnes){
   var deltaUnit=(cp==="C")? Nd1*Math.exp(-rc*T) : Nd1*Math.exp(-rc*T)-1;  // per lot
   var gammaUnit=100*(Math.exp(-rate*T)*Nud1/(F*(vol/100)*Math.sqrt(T)));   // per lot
   var vegaUnit=tonnes*(F*Math.exp(-rc*T)*Nud1*Math.sqrt(T))/100;           // per lot
-  var thetaUnit=tonnes*(-(F*Math.exp(-rc*T)*Nud1*(vol/100))/(2*Math.sqrt(T))+rc*F*Math.exp(-rc*T)*Nd1-rc*K*Math.exp(-rc*T)*Nd2)/365;
+  var thetaCall=tonnes*(-(F*Math.exp(-rc*T)*Nud1*(vol/100))/(2*Math.sqrt(T))+rc*F*Math.exp(-rc*T)*Nd1-rc*K*Math.exp(-rc*T)*Nd2)/365;
+  var thetaPut =tonnes*(-(F*Math.exp(-rc*T)*Nud1*(vol/100))/(2*Math.sqrt(T))+rc*K*Math.exp(-rc*T)*(1-Nd2)-rc*F*Math.exp(-rc*T)*(1-Nd1))/365;
+  var thetaUnit=cp==="C"?thetaCall:thetaPut;
   return {premT,deltaUnit,gammaUnit,vegaUnit,thetaUnit,d1,d2};
 }
 
@@ -443,7 +445,7 @@ function runOutright(b){
   setRow(oBody,4,[num(vg*s,2),num(vg*s,2)]);
   setGVColors(oBody,2,SIDE==="buy"?"var(--call)":"var(--put)",(vg*s>=0)?"var(--call)":"var(--put)");
   // theta: long = negative/red (decay cost), short = positive/green
-  setRow(oBody,5,[col(th*s,2),col(th*s,2)]);
+  setRow(oBody,5,[col(lot*c.thetaUnit*s,2),col(lot*p.thetaUnit*s,2)]);
 
   var cITM=F>K,pITM=F<K;
   var mc=document.getElementById("mCall"),mp=document.getElementById("mPut");
