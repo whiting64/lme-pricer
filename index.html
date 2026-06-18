@@ -120,12 +120,19 @@
       <div class="panel-h">Structure</div>
       <div class="inputs">
 
-        <div class="seg" id="structSeg">
-          <button data-x="outright" class="on">Outright</button>
-          <button data-x="straddle">Straddle</button>
-          <button data-x="strangle">Strangle</button>
-          <button data-x="ratio">1&times;2</button>
-          <button data-x="fly">Fly</button>
+        <div class="field" style="padding-top:2px;">
+          <label>Structure</label>
+          <select id="structSel">
+            <option value="outright">Outright</option>
+            <option value="straddle">Straddle</option>
+            <option value="strangle">Strangle</option>
+            <option value="callspread">Call spread</option>
+            <option value="putspread">Put spread</option>
+            <option value="rr">Risk reversal</option>
+            <option value="collar">Collar</option>
+            <option value="ratio">1×2 ratio</option>
+            <option value="fly">Butterfly</option>
+          </select>
         </div>
 
         <div class="seg-lbl">Metal</div>
@@ -298,6 +305,18 @@ var STRUCTS={
   strangle:{title:"Strangle", cp:false, n:2,
     strikes:[{lbl:"Put strike",vlbl:"Put vol %",cls:"wingp"},{lbl:"Call strike",vlbl:"Call vol %",cls:"wing"}],
     legs:function(){return [{cp:"P",k:1,q:1},{cp:"C",k:2,q:1}];}},
+  callspread:{title:"Call spread", cp:false, n:2,
+    strikes:[{lbl:"K1 long call",vlbl:"Vol %",cls:"wing"},{lbl:"K2 short call",vlbl:"Vol %",cls:"wing"}],
+    legs:function(){return [{cp:"C",k:1,q:1},{cp:"C",k:2,q:-1}];}},
+  putspread:{title:"Put spread", cp:false, n:2,
+    strikes:[{lbl:"K1 short put",vlbl:"Vol %",cls:"wingp"},{lbl:"K2 long put",vlbl:"Vol %",cls:"wingp"}],
+    legs:function(){return [{cp:"P",k:1,q:-1},{cp:"P",k:2,q:1}];}},
+  rr:{title:"Risk reversal", cp:false, n:2,
+    strikes:[{lbl:"Put (sell)",vlbl:"Put vol %",cls:"wingp"},{lbl:"Call (buy)",vlbl:"Call vol %",cls:"wing"}],
+    legs:function(){return [{cp:"P",k:1,q:-1},{cp:"C",k:2,q:1}];}},
+  collar:{title:"Collar", cp:false, n:2,
+    strikes:[{lbl:"Put (buy)",vlbl:"Put vol %",cls:"wingp"},{lbl:"Call (sell)",vlbl:"Call vol %",cls:"wing"}],
+    legs:function(){return [{cp:"P",k:1,q:1},{cp:"C",k:2,q:-1}];}},
   ratio:{title:"1×2 ratio", cp:true, n:2,
     strikes:[{lbl:"K1  buy ×1",vlbl:"Vol %"},{lbl:"K2  sell ×2",vlbl:"Vol %"}],
     legs:function(cp){return [{cp:cp,k:1,q:1},{cp:cp,k:2,q:-2}];}},
@@ -501,7 +520,7 @@ function findBEs(fn,marks){
    ============================================================ */
 function setStruct(x,fire){
   STRUCT=x;
-  document.querySelectorAll("#structSeg button").forEach(function(b){b.classList.toggle("on",b.dataset.x===x);});
+  document.getElementById("structSel").value=x;
   var cfg=STRUCTS[x];
   for(var i=1;i<=3;i++){
     var row=document.getElementById("row"+i);
@@ -579,7 +598,7 @@ function load(){try{var o=JSON.parse(localStorage.getItem("lmePricer2")||"{}");
   setStruct(o.struct||"outright",false);
 }catch(e){setStruct("outright",false);}}
 
-document.querySelectorAll("#structSeg button").forEach(function(b){b.addEventListener("click",function(){setStruct(b.dataset.x,true);});});
+document.getElementById("structSel").addEventListener("change",function(){setStruct(this.value,true);});
 document.querySelectorAll("#metalSeg button").forEach(function(b){b.addEventListener("click",function(){
   document.querySelectorAll("#metalSeg button").forEach(function(x){x.classList.remove("on");});
   b.classList.add("on");run();save();});});
