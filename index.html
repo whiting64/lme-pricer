@@ -590,7 +590,7 @@ function setVolMode(vm,fire){VOLMODE=vm;
 })();
 document.getElementById("pricingdate").value=new Date().toISOString().substring(0,10);
 
-var IDS=["forwardPrice","k1","v1","k2","v2","k3","v3","interestRate","lots","month","pricingdate"];
+var IDS=["forwardPrice","k1","v1","k2","v2","k3","v3","interestRate","lots","month"];
 
 function save(){try{var o={metal:document.querySelector("#metalSeg button.on").dataset.m,side:SIDE,struct:STRUCT,cp:CP,volmode:VOLMODE,ratemode:RATEMODE};
   IDS.forEach(function(id){o[id]=$v(id);});localStorage.setItem("lmePricer2",JSON.stringify(o));}catch(e){}}
