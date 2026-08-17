@@ -145,13 +145,10 @@
   .vstat{font-size:11px;line-height:1.7;color:var(--txt-dim);margin:12px 0 4px;
     letter-spacing:.04em;white-space:pre-wrap;}
   .vstat b{color:var(--txt);} .vstat .bad{color:var(--put);} .vstat .good{color:var(--call);}
-  .vref{font-size:10px;letter-spacing:.02em;margin-left:8px;white-space:nowrap;
-    text-transform:none;font-variant-numeric:tabular-nums;}
-  .vref b{font-weight:600;}
-  .vref.exact b{color:var(--call);}
-  .vref.interp b{color:var(--amber);}
-  .vref i{font-style:normal;color:var(--txt-faint);margin-left:5px;}
-  @media(max-width:430px){.vref i{display:none;}}
+  .vtag{font-size:9px;letter-spacing:.1em;padding:1px 5px;border-radius:3px;margin-left:6px;
+    border:1px solid;vertical-align:middle;}
+  .vtag.exact{color:var(--call);border-color:rgba(52,211,153,.45);}
+  .vtag.interp{color:var(--amber);border-color:rgba(251,191,36,.4);}
   #volChip{font-size:9px;letter-spacing:.1em;color:var(--cyan);border:1px solid var(--cyan-dim);
     border-radius:4px;padding:2px 6px;}
 </style>
@@ -327,7 +324,6 @@
         <div class="maprow"><label>Month</label><select id="mapMonth"></select></div>
         <div class="maprow"><label>Strike</label><select id="mapStrike"></select></div>
         <div class="maprow"><label>Vol</label><select id="mapVol"></select></div>
-        <div class="maprow"><label>Close date</label><select id="mapDate"></select></div>
       </div>
       <div class="vstat" id="volStat"></div>
       <button type="button" id="volApply" class="cpybtn hide">Use these vols</button>
@@ -648,21 +644,6 @@ function normMonth(s){
   return isNaN(d)?null:d.getFullYear()+"-"+pad2(d.getMonth()+1);
 }
 function toNum(s){var v=parseFloat(String(s).replace(/[, $%]/g,""));return isFinite(v)?v:null;}
-/* full YYYY-MM-DD. Dates are read dd/mm/yyyy (LME is UK). */
-function normDate(s){
-  s=String(s).trim();if(!s)return null;var m;
-  if(m=s.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/))return m[1]+"-"+pad2(m[2])+"-"+pad2(m[3]);
-  if(m=s.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/))return m[3]+"-"+pad2(m[2])+"-"+pad2(m[1]);
-  if(m=s.match(/(\d{1,2})[-\s]([A-Za-z]{3,9})[-\s](\d{4})/)){var a=monNum(m[2]);
-    if(a)return m[3]+"-"+pad2(a)+"-"+pad2(m[1]);}
-  if(m=s.match(/(?:^|[^\d])(\d{4})(\d{2})(\d{2})(?:[^\d]|$)/)){
-    if(+m[2]>=1&&+m[2]<=12&&+m[3]>=1&&+m[3]<=31)return m[1]+"-"+m[2]+"-"+m[3];}
-  return null;
-}
-function shortDate(iso){
-  if(!iso)return "";var p=iso.split("-");
-  return (+p[2])+" "+["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+p[1]-1];
-}
 function monthKey(mv){var p=String(mv).split("-");var a=monNum(p[0]);
   return a?(p[1]+"-"+pad2(a)):null;}
 
@@ -680,13 +661,11 @@ var FIELDTEST={
   metal:function(h){return /^(metal|commodity|contract|underlying|product|instrument|symbol|code|market)/i.test(h);},
   month:function(h){return /(month|expiry|expiration|prompt|maturity|period|delivery|declaration)/i.test(h);},
   strike:function(h){return /(strike|exercise)/i.test(h)||/^k$/i.test(h);},
-  vol:function(h){return !/volume/i.test(h)&&(/volatil/i.test(h)||/^vol\b/i.test(h)||/^iv$/i.test(h)||/implied/i.test(h)||/sigma/i.test(h));},
-  /* the close date of the file — not the contract month, so bar the month-ish names */
-  date:function(h){return /(date|as.?of)/i.test(h)&&!/(prompt|expiry|expiration|maturity|delivery|declaration|month)/i.test(h);}
+  vol:function(h){return !/volume/i.test(h)&&(/volatil/i.test(h)||/^vol\b/i.test(h)||/^iv$/i.test(h)||/implied/i.test(h)||/sigma/i.test(h));}
 };
 function guessCols(hdr){
   var g={};
-  ["metal","month","strike","vol","date"].forEach(function(f){
+  ["metal","month","strike","vol"].forEach(function(f){
     for(var i=0;i<hdr.length;i++){if(g[f]==null&&FIELDTEST[f](hdr[i])){g[f]=i;break;}}
     if(g[f]==null)g[f]=-1;
   });
@@ -702,17 +681,7 @@ function findHeader(lines,d){
   }
   return -1;
 }
-/* close date when the file has no date column: banner lines above the header,
-   then the filename, then whenever the file was last written */
-function sniffDate(lines,hi,name,mtime){
-  for(var i=0;i<hi;i++){var d=normDate(lines[i]);if(d)return d;}
-  var f=normDate(String(name||"").replace(/\.[a-z]+$/i,""));
-  if(f)return f;
-  if(mtime){var t=new Date(mtime);
-    if(!isNaN(t))return t.getFullYear()+"-"+pad2(t.getMonth()+1)+"-"+pad2(t.getDate());}
-  return null;
-}
-function parseVolFile(txt,name,mtime){
+function parseVolFile(txt,name){
   var lines=txt.split(/\r?\n/).filter(function(l){return l.trim().length;});
   if(!lines.length)return {err:"File is empty."};
   /* try every delimiter and keep whichever actually yields a header row —
@@ -729,14 +698,12 @@ function parseVolFile(txt,name,mtime){
   var rows=[];
   for(var i=hi+1;i<lines.length;i++){var c=splitLine(lines[i],d);if(c.length>=2)rows.push(c);}
   if(!rows.length)return {err:"Header found but no data rows underneath it."};
-  return {name:name,hdr:hdr,rows:rows,cols:guessCols(hdr),delim:d,
-    autoDate:sniffDate(lines,hi,name,mtime)};
+  return {name:name,hdr:hdr,rows:rows,cols:guessCols(hdr),delim:d};
 }
 /* build the surface from PARSED using the current column mapping */
 function buildSurface(p,cols){
-  var acc={},bad=0,months={},metals={},asof=null;
+  var acc={},bad=0,months={},metals={};
   p.rows.forEach(function(r){
-    if(asof==null&&cols.date>=0)asof=normDate(r[cols.date]);
     var me=cols.metal>=0?normMetal(r[cols.metal]):null;
     var mo=cols.month>=0?normMonth(r[cols.month]):null;
     var k=cols.strike>=0?toNum(r[cols.strike]):null;
@@ -754,7 +721,7 @@ function buildSurface(p,cols){
     arr.sort(function(a,b){return a.k-b.k;});
     data[key]=arr;pts+=arr.length;
   }
-  return {name:p.name,data:data,pts:pts,bad:bad,asof:asof||p.autoDate||null,
+  return {name:p.name,data:data,pts:pts,bad:bad,
     metals:Object.keys(metals).sort(),months:Object.keys(months).sort()};
 }
 
@@ -792,32 +759,24 @@ function volFor(metal,monthVal,K){
 }
 
 /* ---------- auto-fill the vol boxes ---------- */
-/* the closing vol and its date, shown beside the box so it stays visible
-   after you type your own vol over the top */
-function setVolTag(i,r){
+function setVolTag(i,tag){
   var el=document.getElementById("lblv"+i);if(!el)return;
   var b=el.dataset.base||el.textContent;el.dataset.base=b;
-  if(!r){el.innerHTML=b;return;}
-  var tip=r.exact?"Closing vol for this strike"
-        :(r.out?"Outside the quoted strikes — wing vol held flat"
-               :"Interpolated between the quoted strikes");
-  var dt=(SURFACE&&SURFACE.asof)?' <i>'+shortDate(SURFACE.asof)+'</i>':"";
-  el.innerHTML=b+' <span class="vref '+(r.exact?"exact":"interp")+'" title="'+tip+'"><b>'+
-    (r.exact?"":"~")+r.v.toFixed(2)+'</b>'+dt+'</span>';
+  el.innerHTML=b+(tag?' <span class="vtag '+tag.c+'">'+tag.t+'</span>':"");
 }
 function autoVols(){
   var cfg=STRUCTS[STRUCT],n=(STRUCT==="outright")?1:((VOLMODE==="one"&&cfg.n>1)?1:cfg.n);
   for(var i=1;i<=3;i++){
-    var man=(VOLSRC["v"+i]==="manual");
-    if(i>n||!SURFACE){setVolTag(i,null);continue;}
+    if(i>n){setVolTag(i,null);continue;}
+    if(!SURFACE||VOLSRC["v"+i]==="manual"){setVolTag(i,null);continue;}
     var K=fnum("k"+i);
     if(!(K>0)){setVolTag(i,null);continue;}
     var r=volFor(metalCode(),$v("month"),K);
     /* file is loaded but has nothing for this metal/month: empty the box rather
        than leave the previous month's vol sitting there looking current */
-    if(!r){if(!man)document.getElementById("v"+i).value="";setVolTag(i,null);continue;}
-    if(!man)document.getElementById("v"+i).value=r.v.toFixed(2);
-    setVolTag(i,r);
+    if(!r){document.getElementById("v"+i).value="";setVolTag(i,null);continue;}
+    document.getElementById("v"+i).value=r.v.toFixed(2);
+    setVolTag(i,r.exact?{t:"LME",c:"exact"}:(r.out?{t:"EDGE",c:"interp"}:{t:"INTERP",c:"interp"}));
   }
 }
 function resetVolSrc(){VOLSRC={};}
@@ -829,12 +788,10 @@ function volChip(){
   if(SURFACE)el.textContent="VOLS "+SURFACE.pts;
 }
 function fillMapSelects(p){
-  ["Metal","Month","Strike","Vol","Date"].forEach(function(f){
-    var sel=document.getElementById("map"+f),key=f.toLowerCase(),isD=(f==="Date");
+  ["Metal","Month","Strike","Vol"].forEach(function(f){
+    var sel=document.getElementById("map"+f),key=f.toLowerCase();
     sel.innerHTML="";
-    var o0=document.createElement("option");o0.value="-1";
-    o0.textContent=isD?(p.autoDate?"— auto · "+shortDate(p.autoDate)+" —":"— none —"):"— none —";
-    sel.appendChild(o0);
+    var o0=document.createElement("option");o0.value="-1";o0.textContent="— none —";sel.appendChild(o0);
     p.hdr.forEach(function(h,i){var o=document.createElement("option");
       o.value=String(i);o.textContent=h||("col "+(i+1));sel.appendChild(o);});
     sel.value=String(p.cols[key]);
@@ -844,8 +801,7 @@ function currentMap(){
   return {metal:+document.getElementById("mapMetal").value,
           month:+document.getElementById("mapMonth").value,
           strike:+document.getElementById("mapStrike").value,
-          vol:+document.getElementById("mapVol").value,
-          date:+document.getElementById("mapDate").value};
+          vol:+document.getElementById("mapVol").value};
 }
 function previewSurface(){
   if(!PARSED)return;
@@ -860,7 +816,6 @@ function previewSurface(){
                             :s.months.join("  ");
   st.innerHTML="<b>"+PARSED.rows.length.toLocaleString()+"</b> rows read · <b>"+s.pts.toLocaleString()+
     "</b> strikes kept"+(s.bad?' · <span class="bad">'+s.bad.toLocaleString()+" skipped</span>":"")+
-    "\nClose date: "+(s.asof?"<b>"+s.asof+"</b>":'<span class="bad">not found</span>')+
     "\nMetals: <b>"+(s.metals.join(" ")||"—")+"</b>\nMonths: "+mons;
   ap.classList.remove("hide");
 }
@@ -868,7 +823,7 @@ function handleVolFile(file){
   var st=document.getElementById("volStat");
   var fr=new FileReader();
   fr.onload=function(){
-    var p=parseVolFile(String(fr.result),file.name,file.lastModified);
+    var p=parseVolFile(String(fr.result),file.name);
     if(p.err){PARSED=null;
       document.getElementById("volMap").classList.add("hide");
       document.getElementById("volApply").classList.add("hide");
@@ -900,8 +855,7 @@ function openVol(){
   document.getElementById("volApply").classList.add("hide");
   document.getElementById("volClear").classList.toggle("hide",!SURFACE);
   st.innerHTML=SURFACE?("Loaded: <b>"+SURFACE.name+"</b>\n<b>"+SURFACE.pts.toLocaleString()+
-    "</b> strikes · "+SURFACE.metals.join(" ")+(SURFACE.asof?" · close <b>"+SURFACE.asof+"</b>":"")+
-    "\nDrop a new file to replace it."):"";
+    "</b> strikes · "+SURFACE.metals.join(" ")+"\nDrop a new file to replace it."):"";
   PARSED=null;
   document.getElementById("volModal").classList.remove("hide");
 }
@@ -1125,7 +1079,7 @@ document.getElementById("volModal").addEventListener("click",function(e){if(e.ta
 document.getElementById("dropZone").addEventListener("click",function(){document.getElementById("volFile").click();});
 document.getElementById("volFile").addEventListener("change",function(){
   if(this.files&&this.files[0])handleVolFile(this.files[0]);this.value="";});
-["mapMetal","mapMonth","mapStrike","mapVol","mapDate"].forEach(function(id){
+["mapMetal","mapMonth","mapStrike","mapVol"].forEach(function(id){
   document.getElementById(id).addEventListener("change",previewSurface);});
 /* drop anywhere on the page, not just on the zone */
 ["dragenter","dragover"].forEach(function(ev){
