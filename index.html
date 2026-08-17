@@ -150,8 +150,7 @@
   .vtag.exact{color:var(--call);border-color:rgba(52,211,153,.45);}
   .vtag.interp{color:var(--amber);border-color:rgba(251,191,36,.4);}
   #volChip{font-size:9px;letter-spacing:.1em;color:var(--cyan);border:1px solid var(--cyan-dim);
-    border-radius:4px;padding:2px 6px;cursor:pointer;}
-  #volChip:hover{border-color:var(--cyan);}
+    border-radius:4px;padding:2px 6px;}
 </style>
 </head>
 <body>
@@ -166,7 +165,7 @@
 
     <!-- ===== INPUTS ===== -->
     <div class="panel">
-      <div class="panel-h"><span>Structure</span><span class="hgrp"><span id="volChip" class="hide">&mdash;</span><button type="button" id="clearBtn" class="clrbtn">Clear</button></span></div>
+      <div class="panel-h"><span>Structure</span><span class="hgrp"><span id="volChip" class="hide">&mdash;</span><button type="button" id="volBtn" class="clrbtn cpyb">Vols</button><button type="button" id="clearBtn" class="clrbtn">Clear</button></span></div>
       <div class="inputs">
 
         <div class="field" style="padding-top:2px;">
@@ -1072,10 +1071,7 @@ document.getElementById("copyModal").addEventListener("click",function(e){if(e.t
 document.addEventListener("keydown",function(e){if(e.key==="Escape"){closeCopy();closeVol();}});
 
 /* ---- vol file loading ---- */
-/* no Vols button — drop a file on the page to load. The chip only shows once
-   vols are loaded, and opens the dialog so they can be swapped or removed
-   without having to find a file to drop. */
-document.getElementById("volChip").addEventListener("click",openVol);
+document.getElementById("volBtn").addEventListener("click",openVol);
 document.getElementById("volClose").addEventListener("click",closeVol);
 document.getElementById("volApply").addEventListener("click",applySurface);
 document.getElementById("volClear").addEventListener("click",clearSurface);
