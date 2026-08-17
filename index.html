@@ -103,6 +103,11 @@
   .seg.sm button{min-height:34px;padding:7px 14px;font-size:12px;}
   .asof{font-size:10px;color:var(--txt-faint);letter-spacing:.06em;text-transform:uppercase;text-align:right;}
   #interestRate[readonly]{color:var(--txt-dim);background:#0c1320;}
+  .clrbtn{background:#0a1119;border:1px solid var(--line);color:var(--txt-dim);
+    font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    padding:5px 12px;border-radius:5px;cursor:pointer;transition:all .12s;}
+  .clrbtn:hover{border-color:var(--put);color:var(--put);}
+  .clrbtn:active{transform:scale(.96);}
 </style>
 </head>
 <body>
@@ -117,7 +122,7 @@
 
     <!-- ===== INPUTS ===== -->
     <div class="panel">
-      <div class="panel-h">Structure</div>
+      <div class="panel-h"><span>Structure</span><button type="button" id="clearBtn" class="clrbtn">Clear</button></div>
       <div class="inputs">
 
         <div class="field" style="padding-top:2px;">
@@ -606,6 +611,13 @@ function load(){try{var o=JSON.parse(localStorage.getItem("lmePricer2")||"{}");
 }catch(e){setStruct("outright",false);}}
 
 document.getElementById("structSel").addEventListener("change",function(){setStruct(this.value,true);});
+/* clear the trade inputs; keep metal, month, rate, pricing date */
+document.getElementById("clearBtn").addEventListener("click",function(){
+  ["forwardPrice","k1","v1","k2","v2","k3","v3","lots"].forEach(function(id){
+    document.getElementById(id).value="";});
+  document.getElementById("forwardPrice").focus();
+  run();save();
+});
 document.querySelectorAll("#metalSeg button").forEach(function(b){b.addEventListener("click",function(){
   document.querySelectorAll("#metalSeg button").forEach(function(x){x.classList.remove("on");});
   b.classList.add("on");run();save();});});
