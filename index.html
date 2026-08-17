@@ -130,6 +130,27 @@
     padding:12px;border-radius:6px;cursor:pointer;min-height:44px;transition:all .12s;}
   .cpybtn:active{transform:scale(.98);}
   .cpybtn.done{background:rgba(52,211,153,.14);border-color:var(--call);color:var(--call);}
+  .cpybtn[disabled]{opacity:.4;cursor:not-allowed;}
+
+  .drop{border:1px dashed var(--line);border-radius:6px;padding:26px 16px;text-align:center;
+    color:var(--txt-dim);font-size:12px;letter-spacing:.06em;cursor:pointer;transition:all .12s;}
+  .drop span{display:block;font-size:10px;color:var(--txt-faint);margin-top:6px;letter-spacing:.1em;
+    text-transform:uppercase;}
+  .drop:hover,.drop.over{border-color:var(--cyan);color:var(--cyan);background:rgba(34,211,238,.05);}
+  .maprow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;
+    border-bottom:1px solid var(--line-soft);}
+  .maprow label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-dim);}
+  .maprow select{background:#0a1119;border:1px solid var(--line);color:var(--txt);
+    font-family:var(--mono);font-size:13px;padding:7px 10px;border-radius:5px;max-width:60%;flex:1;outline:none;}
+  .vstat{font-size:11px;line-height:1.7;color:var(--txt-dim);margin:12px 0 4px;
+    letter-spacing:.04em;white-space:pre-wrap;}
+  .vstat b{color:var(--txt);} .vstat .bad{color:var(--put);} .vstat .good{color:var(--call);}
+  .vtag{font-size:9px;letter-spacing:.1em;padding:1px 5px;border-radius:3px;margin-left:6px;
+    border:1px solid;vertical-align:middle;}
+  .vtag.exact{color:var(--call);border-color:rgba(52,211,153,.45);}
+  .vtag.interp{color:var(--amber);border-color:rgba(251,191,36,.4);}
+  #volChip{font-size:9px;letter-spacing:.1em;color:var(--cyan);border:1px solid var(--cyan-dim);
+    border-radius:4px;padding:2px 6px;}
 </style>
 </head>
 <body>
@@ -144,7 +165,7 @@
 
     <!-- ===== INPUTS ===== -->
     <div class="panel">
-      <div class="panel-h"><span>Structure</span><button type="button" id="clearBtn" class="clrbtn">Clear</button></div>
+      <div class="panel-h"><span>Structure</span><span class="hgrp"><span id="volChip" class="hide">&mdash;</span><button type="button" id="volBtn" class="clrbtn cpyb">Vols</button><button type="button" id="clearBtn" class="clrbtn">Clear</button></span></div>
       <div class="inputs">
 
         <div class="field" style="padding-top:2px;">
@@ -287,6 +308,26 @@
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- ===== VOL FILE MODAL ===== -->
+<div class="modal hide" id="volModal">
+  <div class="modal-box">
+    <div class="modal-h"><span>Closing vols</span><button type="button" id="volClose" class="xbtn">&#10005;</button></div>
+    <div class="modal-body">
+      <div class="drop" id="dropZone">Drop the closing price file here<span>or click to browse &middot; csv / txt</span></div>
+      <input type="file" id="volFile" accept=".csv,.txt,.tsv,text/csv,text/plain" class="hide">
+      <div id="volMap" class="hide">
+        <div class="maprow"><label>Metal</label><select id="mapMetal"></select></div>
+        <div class="maprow"><label>Month</label><select id="mapMonth"></select></div>
+        <div class="maprow"><label>Strike</label><select id="mapStrike"></select></div>
+        <div class="maprow"><label>Vol</label><select id="mapVol"></select></div>
+      </div>
+      <div class="vstat" id="volStat"></div>
+      <button type="button" id="volApply" class="cpybtn hide">Use these vols</button>
+      <button type="button" id="volClear" class="clrbtn hide" style="width:100%;margin-top:8px;padding:9px;">Remove loaded vols</button>
     </div>
   </div>
 </div>
@@ -454,6 +495,7 @@ function dashTable(body,cols){var ph='<span class="ph">&mdash;</span>';
 
 function run(){
   applyAutoRate();
+  autoVols();
   var b=base();
   document.getElementById("cExp").textContent=isNaN(b.exp)?"—":b.exp.toISOString().substring(0,10);
   document.getElementById("cDte").textContent=isFinite(b.dte)?b.dte:"—";
@@ -563,6 +605,264 @@ function findBEs(fn,marks){
   for(var j=1;j<xs.length;j++){var a=xs[j-1],b=xs[j],fa=fn(a),fb=fn(b);
     if((fa<0&&fb>=0)||(fa>0&&fb<=0))bes.push(a+(b-a)*(0-fa)/(fb-fa));}
   return bes;
+}
+
+/* ============================================================
+   VOL SURFACE — drop the LME closing price file in
+   SURFACE.data["CA|2026-09"] = [{k:strike,v:vol}, ...] sorted by strike
+   ============================================================ */
+var SURFACE=null, VOLSRC={}, PARSED=null;
+
+function pad2(n){n=String(n);return n.length<2?"0"+n:n;}
+var MONNAMES=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+function monNum(s){var i=MONNAMES.indexOf(String(s).slice(0,3).toLowerCase());return i<0?null:i+1;}
+
+var METALALIAS={CA:"CA",CU:"CA",CAD:"CA",COPPER:"CA",
+  AH:"AH",AL:"AH",AHD:"AH",ALUMINIUM:"AH",ALUMINUM:"AH",
+  PB:"PB",PBD:"PB",LEAD:"PB", ZS:"ZS",ZN:"ZS",ZSD:"ZS",ZINC:"ZS",
+  NI:"NI",NID:"NI",NICKEL:"NI", SN:"SN",SND:"SN",TIN:"SN"};
+function normMetal(s){
+  s=String(s).trim().toUpperCase();if(!s)return null;
+  if(METALALIAS[s])return METALALIAS[s];
+  for(var k in METALALIAS){if(k.length>3&&s.indexOf(k)>=0)return METALALIAS[k];}
+  var m=s.match(/^([A-Z]{2,3})\b/);
+  return (m&&METALALIAS[m[1]])?METALALIAS[m[1]]:null;
+}
+/* normalise anything month-ish to YYYY-MM. Dates are read dd/mm/yyyy (LME is UK). */
+function normMonth(s){
+  s=String(s).trim();if(!s)return null;var m;
+  if(m=s.match(/^(\d{4})[-\/.](\d{1,2})(?:[-\/.]\d{1,2})?$/))return m[1]+"-"+pad2(m[2]);
+  if(m=s.match(/^\d{1,2}[-\/.](\d{1,2})[-\/.](\d{4})$/))return m[2]+"-"+pad2(m[1]);
+  if(m=s.match(/^(\d{4})(\d{2})(\d{2})?$/))return m[1]+"-"+m[2];
+  if(m=s.match(/^([A-Za-z]{3,9})[-\s\/]?(\d{2,4})$/)){var a=monNum(m[1]);
+    if(a)return (m[2].length===2?"20"+m[2]:m[2])+"-"+pad2(a);}
+  if(m=s.match(/^(\d{2,4})[-\s\/]?([A-Za-z]{3,9})$/)){var b2=monNum(m[2]);
+    if(b2)return (m[1].length===2?"20"+m[1]:m[1])+"-"+pad2(b2);}
+  if(m=s.match(/^\d{1,2}[-\s\/]([A-Za-z]{3,9})[-\s\/](\d{2,4})$/)){var c2=monNum(m[1]);
+    if(c2)return (m[2].length===2?"20"+m[2]:m[2])+"-"+pad2(c2);}
+  var d=new Date(s);
+  return isNaN(d)?null:d.getFullYear()+"-"+pad2(d.getMonth()+1);
+}
+function toNum(s){var v=parseFloat(String(s).replace(/[, $%]/g,""));return isFinite(v)?v:null;}
+function monthKey(mv){var p=String(mv).split("-");var a=monNum(p[0]);
+  return a?(p[1]+"-"+pad2(a)):null;}
+
+/* ---------- CSV parsing ---------- */
+function splitLine(line,d){
+  var out=[],cur="",q=false;
+  for(var i=0;i<line.length;i++){var ch=line[i];
+    if(ch==='"'){ if(q&&line[i+1]==='"'){cur+='"';i++;} else q=!q; }
+    else if(ch===d&&!q){out.push(cur);cur="";}
+    else cur+=ch;}
+  out.push(cur);
+  return out.map(function(s){return s.trim().replace(/^"|"$/g,"").trim();});
+}
+var FIELDTEST={
+  metal:function(h){return /^(metal|commodity|contract|underlying|product|instrument|symbol|code|market)/i.test(h);},
+  month:function(h){return /(month|expiry|expiration|prompt|maturity|period|delivery|declaration)/i.test(h);},
+  strike:function(h){return /(strike|exercise)/i.test(h)||/^k$/i.test(h);},
+  vol:function(h){return !/volume/i.test(h)&&(/volatil/i.test(h)||/^vol\b/i.test(h)||/^iv$/i.test(h)||/implied/i.test(h)||/sigma/i.test(h));}
+};
+function guessCols(hdr){
+  var g={};
+  ["metal","month","strike","vol"].forEach(function(f){
+    for(var i=0;i<hdr.length;i++){if(g[f]==null&&FIELDTEST[f](hdr[i])){g[f]=i;break;}}
+    if(g[f]==null)g[f]=-1;
+  });
+  return g;
+}
+/* header = first line with >=3 cells where most cells are non-numeric */
+function findHeader(lines,d){
+  for(var i=0;i<Math.min(lines.length,25);i++){
+    var c=splitLine(lines[i],d);
+    if(c.length<3)continue;
+    var txt=c.filter(function(x){return x&&toNum(x)===null;}).length;
+    if(txt>=3&&txt>=c.length/2)return i;
+  }
+  return -1;
+}
+function parseVolFile(txt,name){
+  var lines=txt.split(/\r?\n/).filter(function(l){return l.trim().length;});
+  if(!lines.length)return {err:"File is empty."};
+  /* try every delimiter and keep whichever actually yields a header row —
+     sniffing off line 1 alone breaks on files that open with a title/date banner */
+  var best=null;
+  [",","\t",";","|"].forEach(function(dd){
+    var h=findHeader(lines,dd);if(h<0)return;
+    var n=splitLine(lines[h],dd).length;
+    if(!best||n>best.n)best={d:dd,hi:h,n:n};
+  });
+  if(!best)return {err:"Couldn't find a header row. Expected a line naming the columns."};
+  var d=best.d,hi=best.hi;
+  var hdr=splitLine(lines[hi],d);
+  var rows=[];
+  for(var i=hi+1;i<lines.length;i++){var c=splitLine(lines[i],d);if(c.length>=2)rows.push(c);}
+  if(!rows.length)return {err:"Header found but no data rows underneath it."};
+  return {name:name,hdr:hdr,rows:rows,cols:guessCols(hdr),delim:d};
+}
+/* build the surface from PARSED using the current column mapping */
+function buildSurface(p,cols){
+  var acc={},bad=0,months={},metals={};
+  p.rows.forEach(function(r){
+    var me=cols.metal>=0?normMetal(r[cols.metal]):null;
+    var mo=cols.month>=0?normMonth(r[cols.month]):null;
+    var k=cols.strike>=0?toNum(r[cols.strike]):null;
+    var v=cols.vol>=0?toNum(r[cols.vol]):null;
+    if(!me||!mo||!(k>0)||!(v>0)){bad++;return;}
+    if(v<1.5)v*=100;                       // file stored vol as a decimal
+    if(v>200)  {bad++;return;}
+    var key=me+"|"+mo;
+    (acc[key]=acc[key]||{})[k]=(acc[key][k]==null)?v:(acc[key][k]+v)/2;  // C and P collapse to one smile
+    metals[me]=1;months[mo]=1;
+  });
+  var data={},pts=0;
+  for(var key in acc){
+    var arr=[];for(var k in acc[key])arr.push({k:+k,v:acc[key][k]});
+    arr.sort(function(a,b){return a.k-b.k;});
+    data[key]=arr;pts+=arr.length;
+  }
+  return {name:p.name,data:data,pts:pts,bad:bad,
+    metals:Object.keys(metals).sort(),months:Object.keys(months).sort()};
+}
+
+/* ---------- monotone cubic (Fritsch-Carlson PCHIP) across the smile ----------
+   Cubic through the known strikes, but shape-preserving so it can't overshoot
+   into a silly vol between two points. Outside the quoted strikes it holds the
+   end value flat rather than extrapolating a cubic off a cliff. */
+function pchip(pts,x){
+  var n=pts.length;
+  if(!n)return null;
+  if(n===1)return {v:pts[0].v,exact:pts[0].k===x,out:pts[0].k!==x};
+  if(x<=pts[0].k)   return {v:pts[0].v,   exact:x===pts[0].k,   out:x<pts[0].k};
+  if(x>=pts[n-1].k) return {v:pts[n-1].v, exact:x===pts[n-1].k, out:x>pts[n-1].k};
+  for(var e=0;e<n;e++)if(pts[e].k===x)return {v:pts[e].v,exact:true,out:false};
+  var h=[],dd=[];
+  for(var i=0;i<n-1;i++){h[i]=pts[i+1].k-pts[i].k;dd[i]=(pts[i+1].v-pts[i].v)/h[i];}
+  if(n===2){var t0=(x-pts[0].k)/h[0];return {v:pts[0].v+t0*(pts[1].v-pts[0].v),exact:false,out:false};}
+  var m=[];m[0]=dd[0];m[n-1]=dd[n-2];
+  for(var i=1;i<n-1;i++){
+    if(dd[i-1]*dd[i]<=0)m[i]=0;
+    else{var w1=2*h[i]+h[i-1],w2=h[i]+2*h[i-1];m[i]=(w1+w2)/(w1/dd[i-1]+w2/dd[i]);}
+  }
+  var j=0;while(j<n-2&&x>pts[j+1].k)j++;
+  var t=(x-pts[j].k)/h[j],t2=t*t,t3=t2*t;
+  return {v:(2*t3-3*t2+1)*pts[j].v+(t3-2*t2+t)*h[j]*m[j]+(-2*t3+3*t2)*pts[j+1].v+(t3-t2)*h[j]*m[j+1],
+    exact:false,out:false};
+}
+function volFor(metal,monthVal,K){
+  if(!SURFACE)return null;
+  var mk=monthKey(monthVal);if(!mk)return null;
+  var arr=SURFACE.data[metal+"|"+mk];
+  if(!arr||!arr.length)return null;
+  var r=pchip(arr,K);
+  return (r&&isFinite(r.v)&&r.v>0)?r:null;
+}
+
+/* ---------- auto-fill the vol boxes ---------- */
+function setVolTag(i,tag){
+  var el=document.getElementById("lblv"+i);if(!el)return;
+  var b=el.dataset.base||el.textContent;el.dataset.base=b;
+  el.innerHTML=b+(tag?' <span class="vtag '+tag.c+'">'+tag.t+'</span>':"");
+}
+function autoVols(){
+  var cfg=STRUCTS[STRUCT],n=(STRUCT==="outright")?1:((VOLMODE==="one"&&cfg.n>1)?1:cfg.n);
+  for(var i=1;i<=3;i++){
+    if(i>n){setVolTag(i,null);continue;}
+    if(!SURFACE||VOLSRC["v"+i]==="manual"){setVolTag(i,null);continue;}
+    var K=fnum("k"+i);
+    if(!(K>0)){setVolTag(i,null);continue;}
+    var r=volFor(metalCode(),$v("month"),K);
+    /* file is loaded but has nothing for this metal/month: empty the box rather
+       than leave the previous month's vol sitting there looking current */
+    if(!r){document.getElementById("v"+i).value="";setVolTag(i,null);continue;}
+    document.getElementById("v"+i).value=r.v.toFixed(2);
+    setVolTag(i,r.exact?{t:"LME",c:"exact"}:(r.out?{t:"EDGE",c:"interp"}:{t:"INTERP",c:"interp"}));
+  }
+}
+function resetVolSrc(){VOLSRC={};}
+
+/* ---------- modal ---------- */
+function volChip(){
+  var el=document.getElementById("volChip");
+  el.classList.toggle("hide",!SURFACE);
+  if(SURFACE)el.textContent="VOLS "+SURFACE.pts;
+}
+function fillMapSelects(p){
+  ["Metal","Month","Strike","Vol"].forEach(function(f){
+    var sel=document.getElementById("map"+f),key=f.toLowerCase();
+    sel.innerHTML="";
+    var o0=document.createElement("option");o0.value="-1";o0.textContent="— none —";sel.appendChild(o0);
+    p.hdr.forEach(function(h,i){var o=document.createElement("option");
+      o.value=String(i);o.textContent=h||("col "+(i+1));sel.appendChild(o);});
+    sel.value=String(p.cols[key]);
+  });
+}
+function currentMap(){
+  return {metal:+document.getElementById("mapMetal").value,
+          month:+document.getElementById("mapMonth").value,
+          strike:+document.getElementById("mapStrike").value,
+          vol:+document.getElementById("mapVol").value};
+}
+function previewSurface(){
+  if(!PARSED)return;
+  var st=document.getElementById("volStat"),ap=document.getElementById("volApply");
+  var s=buildSurface(PARSED,currentMap());
+  PARSED.built=s;
+  if(!s.pts){
+    st.innerHTML='<span class="bad">No usable rows with that mapping.</span>\nCheck the four dropdowns above match the right columns.';
+    ap.classList.add("hide");return;
+  }
+  var mons=s.months.length>6?(s.months[0]+" → "+s.months[s.months.length-1]+"  ("+s.months.length+" months)")
+                            :s.months.join("  ");
+  st.innerHTML="<b>"+PARSED.rows.length.toLocaleString()+"</b> rows read · <b>"+s.pts.toLocaleString()+
+    "</b> strikes kept"+(s.bad?' · <span class="bad">'+s.bad.toLocaleString()+" skipped</span>":"")+
+    "\nMetals: <b>"+(s.metals.join(" ")||"—")+"</b>\nMonths: "+mons;
+  ap.classList.remove("hide");
+}
+function handleVolFile(file){
+  var st=document.getElementById("volStat");
+  var fr=new FileReader();
+  fr.onload=function(){
+    var p=parseVolFile(String(fr.result),file.name);
+    if(p.err){PARSED=null;
+      document.getElementById("volMap").classList.add("hide");
+      document.getElementById("volApply").classList.add("hide");
+      st.innerHTML='<span class="bad">'+p.err+"</span>";return;}
+    PARSED=p;
+    fillMapSelects(p);
+    document.getElementById("volMap").classList.remove("hide");
+    previewSurface();
+  };
+  fr.onerror=function(){st.innerHTML='<span class="bad">Could not read that file.</span>';};
+  fr.readAsText(file);
+}
+function applySurface(){
+  if(!PARSED||!PARSED.built||!PARSED.built.pts)return;
+  SURFACE=PARSED.built;
+  try{localStorage.setItem("lmeVols",JSON.stringify(SURFACE));}catch(e){}
+  resetVolSrc();volChip();closeVol();run();save();
+}
+function clearSurface(){
+  SURFACE=null;PARSED=null;
+  try{localStorage.removeItem("lmeVols");}catch(e){}
+  resetVolSrc();volChip();
+  for(var i=1;i<=3;i++)setVolTag(i,null);
+  closeVol();run();
+}
+function openVol(){
+  var st=document.getElementById("volStat");
+  document.getElementById("volMap").classList.add("hide");
+  document.getElementById("volApply").classList.add("hide");
+  document.getElementById("volClear").classList.toggle("hide",!SURFACE);
+  st.innerHTML=SURFACE?("Loaded: <b>"+SURFACE.name+"</b>\n<b>"+SURFACE.pts.toLocaleString()+
+    "</b> strikes · "+SURFACE.metals.join(" ")+"\nDrop a new file to replace it."):"";
+  PARSED=null;
+  document.getElementById("volModal").classList.remove("hide");
+}
+function closeVol(){document.getElementById("volModal").classList.add("hide");}
+function loadStoredVols(){
+  try{var j=JSON.parse(localStorage.getItem("lmeVols")||"null");
+    if(j&&j.data&&j.pts){SURFACE=j;volChip();}}catch(e){}
 }
 
 /* ============================================================
@@ -688,7 +988,7 @@ function setStruct(x,fire){
     if(i<=cfg.n){row.classList.remove("hide");
       var sd=cfg.strikes[i-1];
       document.getElementById("lblk"+i).textContent=sd.lbl;
-      document.getElementById("lblv"+i).textContent=sd.vlbl;
+      var lv=document.getElementById("lblv"+i);lv.textContent=sd.vlbl;lv.dataset.base=sd.vlbl;
       var kf=document.getElementById("k"+i).parentNode;
       kf.className="field"+(sd.cls?(" "+sd.cls):"");
     } else row.classList.add("hide");
@@ -719,11 +1019,13 @@ function applyVolFields(cfg){
   for(var i=1;i<=cfg.n;i++){
     var vfield=document.getElementById("v"+i).closest(".field");
     if(one){
-      if(i===1){document.getElementById("lblv1").textContent="Vol %";vfield.classList.remove("hide");}
+      if(i===1){var l1=document.getElementById("lblv1");l1.textContent="Vol %";l1.dataset.base="Vol %";
+        vfield.classList.remove("hide");}
       else vfield.classList.add("hide");
     }else{
       vfield.classList.remove("hide");
-      document.getElementById("lblv"+i).textContent=cfg.strikes[i-1].vlbl;
+      var lm=document.getElementById("lblv"+i);
+      lm.textContent=cfg.strikes[i-1].vlbl;lm.dataset.base=cfg.strikes[i-1].vlbl;
     }
   }
 }
@@ -746,11 +1048,12 @@ document.getElementById("pricingdate").value=new Date().toISOString().substring(
 
 var IDS=["forwardPrice","k1","v1","k2","v2","k3","v3","interestRate","lots","month"];
 
-function save(){try{var o={metal:document.querySelector("#metalSeg button.on").dataset.m,side:SIDE,struct:STRUCT,cp:CP,volmode:VOLMODE,ratemode:RATEMODE};
+function save(){try{var o={metal:document.querySelector("#metalSeg button.on").dataset.m,side:SIDE,struct:STRUCT,cp:CP,volmode:VOLMODE,ratemode:RATEMODE,volsrc:VOLSRC};
   IDS.forEach(function(id){o[id]=$v(id);});localStorage.setItem("lmePricer2",JSON.stringify(o));}catch(e){}}
 function load(){try{var o=JSON.parse(localStorage.getItem("lmePricer2")||"{}");
   IDS.forEach(function(id){if(o[id]!=null&&o[id]!=="")document.getElementById(id).value=o[id];});
   if(o.metal)document.querySelectorAll("#metalSeg button").forEach(function(b){b.classList.toggle("on",b.dataset.m===o.metal);});
+  if(o.volsrc)VOLSRC=o.volsrc;      // a hard-coded vol stays hard-coded across a refresh
   if(o.cp)CP=o.cp; setCP(CP,false);
   if(o.side)setSide(o.side,false);
   if(o.volmode)VOLMODE=o.volmode;
@@ -765,7 +1068,34 @@ document.getElementById("copyBtn2").addEventListener("click",openCopy);
 document.getElementById("copyClose").addEventListener("click",closeCopy);
 document.getElementById("copyDo").addEventListener("click",doCopy);
 document.getElementById("copyModal").addEventListener("click",function(e){if(e.target===this)closeCopy();});
-document.addEventListener("keydown",function(e){if(e.key==="Escape")closeCopy();});
+document.addEventListener("keydown",function(e){if(e.key==="Escape"){closeCopy();closeVol();}});
+
+/* ---- vol file loading ---- */
+document.getElementById("volBtn").addEventListener("click",openVol);
+document.getElementById("volClose").addEventListener("click",closeVol);
+document.getElementById("volApply").addEventListener("click",applySurface);
+document.getElementById("volClear").addEventListener("click",clearSurface);
+document.getElementById("volModal").addEventListener("click",function(e){if(e.target===this)closeVol();});
+document.getElementById("dropZone").addEventListener("click",function(){document.getElementById("volFile").click();});
+document.getElementById("volFile").addEventListener("change",function(){
+  if(this.files&&this.files[0])handleVolFile(this.files[0]);this.value="";});
+["mapMetal","mapMonth","mapStrike","mapVol"].forEach(function(id){
+  document.getElementById(id).addEventListener("change",previewSurface);});
+/* drop anywhere on the page, not just on the zone */
+["dragenter","dragover"].forEach(function(ev){
+  document.addEventListener(ev,function(e){e.preventDefault();
+    document.getElementById("dropZone").classList.add("over");});});
+["dragleave","drop"].forEach(function(ev){
+  document.addEventListener(ev,function(e){e.preventDefault();
+    if(ev==="drop"||e.target===document.documentElement)
+      document.getElementById("dropZone").classList.remove("over");});});
+document.addEventListener("drop",function(e){
+  var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+  if(!f)return;
+  document.getElementById("volModal").classList.remove("hide");
+  document.getElementById("volClear").classList.toggle("hide",!SURFACE);
+  handleVolFile(f);
+});
 document.querySelectorAll("#copySeg button").forEach(function(b){b.addEventListener("click",function(){
   COPYWHICH=b.dataset.t;
   document.querySelectorAll("#copySeg button").forEach(function(x){x.classList.toggle("on",x===b);});
@@ -774,12 +1104,13 @@ document.querySelectorAll("#copySeg button").forEach(function(b){b.addEventListe
 document.getElementById("clearBtn").addEventListener("click",function(){
   ["forwardPrice","k1","v1","k2","v2","k3","v3","lots"].forEach(function(id){
     document.getElementById(id).value="";});
+  resetVolSrc();
   document.getElementById("forwardPrice").focus();
   run();save();
 });
 document.querySelectorAll("#metalSeg button").forEach(function(b){b.addEventListener("click",function(){
   document.querySelectorAll("#metalSeg button").forEach(function(x){x.classList.remove("on");});
-  b.classList.add("on");run();save();});});
+  b.classList.add("on");resetVolSrc();run();save();});});
 document.querySelectorAll("#sideSeg button").forEach(function(b){b.addEventListener("click",function(){setSide(b.dataset.s,true);});});
 document.querySelectorAll("#cpSeg button").forEach(function(b){b.addEventListener("click",function(){setCP(b.dataset.c,true);});});
 document.querySelectorAll("#volSeg button").forEach(function(b){b.addEventListener("click",function(){setVolMode(b.dataset.vm,true);});});
@@ -787,9 +1118,16 @@ document.querySelectorAll("#rateSeg button").forEach(function(b){b.addEventListe
 
 var timer=null;
 IDS.forEach(function(id){var e=document.getElementById(id);
-  var h=function(){clearTimeout(timer);timer=setTimeout(function(){run();save();},120);};
+  var h=function(){
+    /* typing a vol pins it; changing that strike, the metal or the month
+       hands the box back to the file */
+    if(/^v[1-3]$/.test(id))VOLSRC[id]="manual";
+    else if(/^k[1-3]$/.test(id))VOLSRC["v"+id.slice(1)]="auto";
+    else if(id==="month")resetVolSrc();
+    clearTimeout(timer);timer=setTimeout(function(){run();save();},120);};
   e.addEventListener("input",h);e.addEventListener("change",h);});
 
+loadStoredVols();
 load();
 run();
 loadRates();
