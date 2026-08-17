@@ -108,6 +108,28 @@
     padding:5px 12px;border-radius:5px;cursor:pointer;transition:all .12s;}
   .clrbtn:hover{border-color:var(--put);color:var(--put);}
   .clrbtn:active{transform:scale(.96);}
+  .cpyb:hover{border-color:var(--cyan);color:var(--cyan);}
+  .hgrp{display:flex;align-items:center;gap:10px;}
+
+  .modal{position:fixed;inset:0;background:rgba(5,8,12,.78);display:flex;align-items:center;
+    justify-content:center;padding:20px;z-index:50;}
+  .modal-box{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    width:100%;max-width:580px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;}
+  .modal-h{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--txt-dim);
+    padding:11px 16px;border-bottom:1px solid var(--line-soft);background:var(--panel-2);
+    display:flex;justify-content:space-between;align-items:center;}
+  .xbtn{background:none;border:none;color:var(--txt-dim);font-family:var(--mono);
+    font-size:15px;cursor:pointer;padding:0 2px;line-height:1;}
+  .xbtn:hover{color:var(--put);}
+  .modal-body{padding:14px 16px 16px;overflow:auto;}
+  #copyPre{background:#0a1119;border:1px solid var(--line);border-radius:6px;
+    padding:13px 14px;margin:12px 0;font-family:var(--mono);font-size:12px;line-height:1.55;
+    color:var(--txt);white-space:pre;overflow-x:auto;}
+  .cpybtn{width:100%;background:rgba(34,211,238,.10);border:1px solid var(--cyan);color:var(--cyan);
+    font-family:var(--mono);font-size:13px;letter-spacing:.1em;text-transform:uppercase;
+    padding:12px;border-radius:6px;cursor:pointer;min-height:44px;transition:all .12s;}
+  .cpybtn:active{transform:scale(.98);}
+  .cpybtn.done{background:rgba(52,211,153,.14);border-color:var(--call);color:var(--call);}
 </style>
 </head>
 <body>
@@ -227,7 +249,7 @@
 
       <!-- outright table -->
       <div class="panel" id="resOutright">
-        <div class="panel-h"><span>Results</span><span id="sideTag" style="color:var(--call);">BUY</span></div>
+        <div class="panel-h"><span>Results</span><span class="hgrp"><span id="sideTag" style="color:var(--call);">BUY</span><button type="button" id="copyBtn1" class="clrbtn cpyb">Copy</button></span></div>
         <table>
           <thead><tr><th>Metric</th><th class="call">Call</th><th class="put">Put</th></tr></thead>
           <tbody id="oBody">
@@ -247,7 +269,7 @@
 
       <!-- structure table -->
       <div class="panel hide" id="resStruct">
-        <div class="panel-h"><span id="structTitle">Structure</span><span id="sideTag2" style="color:var(--call);">BUY</span></div>
+        <div class="panel-h"><span id="structTitle">Structure</span><span class="hgrp"><span id="sideTag2" style="color:var(--call);">BUY</span><button type="button" id="copyBtn2" class="clrbtn cpyb">Copy</button></span></div>
         <table>
           <thead><tr><th>Metric</th><th class="net">Net</th></tr></thead>
           <tbody id="sBody">
@@ -265,6 +287,22 @@
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- ===== COPY TICKET MODAL ===== -->
+<div class="modal hide" id="copyModal">
+  <div class="modal-box">
+    <div class="modal-h"><span>Copy ticket</span><button type="button" id="copyClose" class="xbtn">&#10005;</button></div>
+    <div class="modal-body">
+      <div class="seg" id="copySeg">
+        <button data-t="C" class="on">Call</button>
+        <button data-t="P">Put</button>
+        <button data-t="B">Both</button>
+      </div>
+      <pre id="copyPre"></pre>
+      <button type="button" id="copyDo" class="cpybtn">Copy to clipboard</button>
     </div>
   </div>
 </div>
@@ -528,6 +566,117 @@ function findBEs(fn,marks){
 }
 
 /* ============================================================
+   COPY TICKET — fixed-width text for chat / Bloomberg / Teams
+   ============================================================ */
+var COPYWHICH="C";
+function padR(s,n){s=String(s);while(s.length<n)s+=" ";return s;}
+function padL(s,n){s=String(s);while(s.length<n)s=" "+s;return s;}
+function rule(n){var s="";for(var i=0;i<n;i++)s+="─";return s;}
+function monthShort(){var m=$v("month").split("-");return m[0].toUpperCase()+"-"+m[1].slice(2);}
+function metalCode(){return document.querySelector("#metalSeg button.on").dataset.m;}
+function expStr(b){return isNaN(b.exp)?"—":b.exp.toISOString().substring(0,10);}
+function lotsStr(b){return num(b.lots,0)+" lots ("+num(b.lots*b.tonnes,0)+"t)";}
+
+function ticketOutright(which){
+  var L=LAST,b=L.b,s=sign(),isC=(which==="C"),W=13,o=[];
+  var prem=isC?L.premC:L.premP, d=isC?L.dC:L.dP;
+  var th=b.lots*(isC?L.c.thetaUnit:L.p.thetaUnit)*s;
+  var itm=isC?(b.F>L.K):(b.F<L.K), be=isC?(L.K+prem):(L.K-prem);
+  o.push("LME "+metalCode()+" · "+monthShort()+" · "+SIDE.toUpperCase());
+  o.push(rule(30));
+  o.push(padR((isC?"Call ":"Put ")+num(L.K,0),17)+lotsStr(b));
+  o.push(padR("Vol "+num(L.vol,1)+"%",17)+"Ref "+num(b.F,0));
+  o.push("");
+  o.push(padR("Premium",W)+num(prem,2)+" /t");
+  o.push(padR(s>0?"Cost":"Rcv",W)+money(prem*b.tonnes*b.lots));
+  o.push("");
+  o.push(padR("Delta",W)+num(d*s,3));
+  o.push(padR("Gamma",W)+num(L.g*s,4));
+  o.push(padR("Vega",W)+num(L.vg*s,2));
+  o.push(padR("Theta",W)+num(th,2));
+  o.push("");
+  o.push(padR("Breakeven",W)+padR(num(be,1),11)+"("+(itm?"ITM":"OTM")+")");
+  o.push(padR("Expiry",W)+expStr(b)+" · "+b.dte+" DTE");
+  return o.join("\n");
+}
+
+function ticketBoth(){
+  var L=LAST,b=L.b,s=sign(),W=14,C=12,o=[];
+  var thC=b.lots*L.c.thetaUnit*s, thP=b.lots*L.p.thetaUnit*s;
+  o.push("LME "+metalCode()+" · "+monthShort()+" · "+SIDE.toUpperCase()+" · "+lotsStr(b));
+  o.push("Ref "+num(b.F,0)+" · Strike "+num(L.K,0)+" · Vol "+num(L.vol,1)+"%");
+  o.push(rule(40));
+  o.push(padR("",W)+padL("CALL",C)+padL("PUT",C));
+  o.push(padR("Premium /t",W)+padL(num(L.premC,2),C)+padL(num(L.premP,2),C));
+  o.push(padR(s>0?"Cost":"Rcv",W)+padL(money(L.premC*b.tonnes*b.lots),C)+padL(money(L.premP*b.tonnes*b.lots),C));
+  o.push(padR("Delta",W)+padL(num(L.dC*s,3),C)+padL(num(L.dP*s,3),C));
+  o.push(padR("Gamma",W)+padL(num(L.g*s,4),C)+padL(num(L.g*s,4),C));
+  o.push(padR("Vega",W)+padL(num(L.vg*s,2),C)+padL(num(L.vg*s,2),C));
+  o.push(padR("Theta",W)+padL(num(thC,2),C)+padL(num(thP,2),C));
+  o.push(padR("Breakeven",W)+padL(num(L.K+L.premC,1),C)+padL(num(L.K-L.premP,1),C));
+  o.push(padR("Status",W)+padL(b.F>L.K?"ITM":"OTM",C)+padL(b.F<L.K?"ITM":"OTM",C));
+  o.push(rule(40));
+  o.push("Expiry "+expStr(b)+" · "+b.dte+" DTE · r "+num(b.rate*100,3)+"%");
+  return o.join("\n");
+}
+
+function ticketStruct(){
+  var L=LAST,b=L.b,s=sign(),W=13,o=[];
+  var cf=-s*L.premT;                       // >0 = you receive
+  o.push("LME "+metalCode()+" · "+monthShort()+" · "+SIDE.toUpperCase()+" "+L.cfg.title.toUpperCase());
+  o.push(rule(34));
+  L.legsDef.forEach(function(lg){          // q*s = the position you actually end up with
+    var q=lg.q*s, n2=Math.abs(q);
+    o.push(padR(padR(q>0?"Long":"Short",6)+(n2>1?n2+"x ":"")+num(L.Ks[lg.k],0)+" "+lg.cp,20)+"@ "+num(L.Vs[lg.k],1)+"%");
+  });
+  o.push(lotsStr(b)+" · Ref "+num(b.F,0));
+  o.push("");
+  o.push(padR("Premium",W)+num(Math.abs(L.premT),2)+" /t");
+  o.push(padR(cf<0?"Cost":"Rcv",W)+padR(money(Math.abs(cf)*b.tonnes*b.lots),14)+(cf<0?"DEBIT":"CREDIT"));
+  o.push("");
+  o.push(padR("Delta",W)+num(L.dl*s,3));
+  o.push(padR("Gamma",W)+num(L.gm*s,4));
+  o.push(padR("Vega",W)+num(L.vg*s,2));
+  o.push(padR("Theta",W)+num(L.th*s,2));
+  o.push("");
+  var bes=findBEs(L.netFn,L.strikes.concat([b.F]));
+  o.push(padR("Breakeven",W)+(bes.length?bes.map(function(x){return num(x,0);}).join(" / "):"—"));
+  o.push(padR("Expiry",W)+expStr(b)+" · "+b.dte+" DTE");
+  return o.join("\n");
+}
+
+function buildTicket(){
+  if(!LAST)return "No valid inputs — fill in the trade first.";
+  if(LAST.mode==="struct")return ticketStruct();
+  return COPYWHICH==="B"?ticketBoth():ticketOutright(COPYWHICH);
+}
+function refreshCopy(){
+  document.getElementById("copyPre").textContent=buildTicket();
+  var db=document.getElementById("copyDo");
+  db.classList.remove("done");db.textContent="Copy to clipboard";
+}
+function openCopy(){
+  document.getElementById("copySeg").classList.toggle("hide",STRUCT!=="outright");
+  refreshCopy();
+  document.getElementById("copyModal").classList.remove("hide");
+}
+function closeCopy(){document.getElementById("copyModal").classList.add("hide");}
+function fallbackCopy(txt,ok){
+  var ta=document.createElement("textarea");ta.value=txt;
+  ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);
+  ta.select();try{document.execCommand("copy");ok();}catch(e){}
+  document.body.removeChild(ta);
+}
+function doCopy(){
+  var txt=document.getElementById("copyPre").textContent,db=document.getElementById("copyDo");
+  var ok=function(){db.textContent="Copied ✓";db.classList.add("done");
+    setTimeout(function(){db.textContent="Copy to clipboard";db.classList.remove("done");},1400);};
+  if(navigator.clipboard&&navigator.clipboard.writeText)
+    navigator.clipboard.writeText(txt).then(ok,function(){fallbackCopy(txt,ok);});
+  else fallbackCopy(txt,ok);
+}
+
+/* ============================================================
    STRUCTURE / SIDE / CP SWITCHING
    ============================================================ */
 function setStruct(x,fire){
@@ -611,6 +760,16 @@ function load(){try{var o=JSON.parse(localStorage.getItem("lmePricer2")||"{}");
 }catch(e){setStruct("outright",false);}}
 
 document.getElementById("structSel").addEventListener("change",function(){setStruct(this.value,true);});
+document.getElementById("copyBtn1").addEventListener("click",openCopy);
+document.getElementById("copyBtn2").addEventListener("click",openCopy);
+document.getElementById("copyClose").addEventListener("click",closeCopy);
+document.getElementById("copyDo").addEventListener("click",doCopy);
+document.getElementById("copyModal").addEventListener("click",function(e){if(e.target===this)closeCopy();});
+document.addEventListener("keydown",function(e){if(e.key==="Escape")closeCopy();});
+document.querySelectorAll("#copySeg button").forEach(function(b){b.addEventListener("click",function(){
+  COPYWHICH=b.dataset.t;
+  document.querySelectorAll("#copySeg button").forEach(function(x){x.classList.toggle("on",x===b);});
+  refreshCopy();});});
 /* clear the trade inputs; keep metal, month, rate, pricing date */
 document.getElementById("clearBtn").addEventListener("click",function(){
   ["forwardPrice","k1","v1","k2","v2","k3","v3","lots"].forEach(function(id){
