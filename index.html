@@ -109,15 +109,12 @@
   .clrbtn:hover{border-color:var(--put);color:var(--put);}
   .clrbtn:active{transform:scale(.96);}
   .cpyb:hover{border-color:var(--cyan);color:var(--cyan);}
-  .clrbtn.on{background:rgba(34,211,238,.10);border-color:var(--cyan);color:var(--cyan);}
   .hgrp{display:flex;align-items:center;gap:10px;}
   .field input.qty{flex:0 0 56px;max-width:56px;text-align:center;font-size:14px;
     padding:10px 4px;color:var(--cyan);}
   .warn{margin:10px 0 2px;padding:9px 11px;border:1px solid rgba(251,113,133,.45);
     border-radius:6px;background:rgba(251,113,133,.07);color:var(--put);
     font-size:11px;line-height:1.5;letter-spacing:.03em;}
-  .res tbody tr.hrow td{border-top:1px solid var(--line);}
-  .res tbody tr.hrow td:first-child{color:var(--cyan-dim);}
 
   .modal{position:fixed;inset:0;background:rgba(5,8,12,.78);display:flex;align-items:center;
     justify-content:center;padding:20px;z-index:50;}
@@ -258,7 +255,7 @@
 
       <!-- outright table -->
       <div class="panel" id="resOutright">
-        <div class="panel-h"><span>Results</span><span class="hgrp"><span id="sideTag" style="color:var(--call);">BUY</span><button type="button" id="hedgeBtn1" class="clrbtn cpyb">Hedge</button><button type="button" id="copyBtn1" class="clrbtn cpyb">Copy</button></span></div>
+        <div class="panel-h"><span>Results</span><span class="hgrp"><span id="sideTag" style="color:var(--call);">BUY</span><button type="button" id="copyBtn1" class="clrbtn cpyb">Copy</button></span></div>
         <table>
           <thead><tr><th>Metric</th><th class="call">Call</th><th class="put">Put</th></tr></thead>
           <tbody id="oBody">
@@ -268,20 +265,17 @@
             <tr><td>Gamma</td><td class="call"><span class="ph">&mdash;</span></td><td class="put"><span class="ph">&mdash;</span></td></tr>
             <tr><td>Vega<span class="u">$ / vol pt</span></td><td class="call"><span class="ph">&mdash;</span></td><td class="put"><span class="ph">&mdash;</span></td></tr>
             <tr><td>Theta<span class="u">$ / day</span></td><td class="call"><span class="ph">&mdash;</span></td><td class="put"><span class="ph">&mdash;</span></td></tr>
-            <tr class="hrow hide"><td>Hedge<span class="u">futures lots</span></td><td><span class="ph">&mdash;</span></td><td><span class="ph">&mdash;</span></td></tr>
-            <tr class="hrow hide"><td>Residual<span class="u">delta lots</span></td><td><span class="ph">&mdash;</span></td><td><span class="ph">&mdash;</span></td></tr>
           </tbody>
         </table>
         <div class="meta">
           <span>Call <span id="mCall" class="tag">&mdash;</span> BE <b id="beCall">&mdash;</b></span>
           <span>Put <span id="mPut" class="tag">&mdash;</span> BE <b id="bePut">&mdash;</b></span>
-          <span id="hedgeInfo" class="hide"></span>
         </div>
       </div>
 
       <!-- structure table -->
       <div class="panel hide" id="resStruct">
-        <div class="panel-h"><span id="structTitle">Structure</span><span class="hgrp"><span id="sideTag2" style="color:var(--call);">BUY</span><button type="button" id="hedgeBtn2" class="clrbtn cpyb">Hedge</button><button type="button" id="copyBtn2" class="clrbtn cpyb">Copy</button></span></div>
+        <div class="panel-h"><span id="structTitle">Structure</span><span class="hgrp"><span id="sideTag2" style="color:var(--call);">BUY</span><button type="button" id="copyBtn2" class="clrbtn cpyb">Copy</button></span></div>
         <table>
           <thead><tr><th>Metric</th><th class="net">Net</th></tr></thead>
           <tbody id="sBody">
@@ -291,14 +285,11 @@
             <tr><td>Gamma</td><td class="net"><span class="ph">&mdash;</span></td></tr>
             <tr><td>Vega<span class="u">$ / vol pt</span></td><td class="net"><span class="ph">&mdash;</span></td></tr>
             <tr><td>Theta<span class="u">$ / day</span></td><td class="net"><span class="ph">&mdash;</span></td></tr>
-            <tr class="hrow hide"><td>Hedge<span class="u">futures lots</span></td><td><span class="ph">&mdash;</span></td></tr>
-            <tr class="hrow hide"><td>Residual<span class="u">delta lots</span></td><td><span class="ph">&mdash;</span></td></tr>
           </tbody>
         </table>
         <div class="meta">
           <span id="netTag" class="tag">&mdash;</span>
           <span>BE <b id="beStruct">&mdash;</b></span>
-          <span id="hedgeInfo2" class="hide"></span>
         </div>
       </div>
 
@@ -388,7 +379,7 @@ var STRUCTS={
 /* ============================================================
    STATE + HELPERS
    ============================================================ */
-var STRUCT="outright", SIDE="buy", CP="C", VOLMODE="each", LAST=null, HEDGE=false;
+var STRUCT="outright", SIDE="buy", CP="C", VOLMODE="each", LAST=null;
 var CURVE=[], ASOF=null, RATEMODE="auto";
 function sign(){return SIDE==="buy"?1:-1;}
 function $v(id){return document.getElementById(id).value;}
@@ -468,22 +459,6 @@ function dashTable(body,cols){var ph='<span class="ph">&mdash;</span>';
   var n=body.querySelectorAll("tr").length;
   for(var r=0;r<n;r++)setRow(body,r,cols===2?[ph,ph]:[ph]);}
 
-/* ---- delta hedge ----------------------------------------------------------
-   LME futures only trade in whole lots, so the hedge is round(delta) and you
-   carry the stub. h>0 = sell that many lots. */
-function hedgeFor(D){
-  var h=Math.round(D);
-  return {h:h, txt:(h===0?"flat":(h>0?"Sell ":"Buy ")+num(Math.abs(h),0)), res:D-h};
-}
-function colHedge(H){
-  if(H.h===0)return '<span style="color:var(--txt-faint)">flat</span>';
-  return '<span style="color:'+(H.h>0?"var(--put)":"var(--call)")+'">'+H.txt+'</span>';
-}
-/* P&L at expiry in $/lot-equivalent: option leg plus the futures hedge.
-   With h=0 the zeros are identical to the unhedged payoff. */
-function hedgedZeros(payFn,premPerT,lots,h,F,s,marks){
-  return findBEs(function(S){return s*lots*(payFn(S)-premPerT)-h*(S-F);},marks);
-}
 function beText(bes){return bes.length?bes.map(function(x){return num(x,0);}).join(" / "):"—";}
 
 function run(){
@@ -502,7 +477,6 @@ function runOutright(b){
   var d1d2=["—","—"];
   var oBody=document.getElementById("oBody");
   if(!okBase(b)||!(K>0)||!(vol>0)){dashTable(oBody,2);clearGVColors(oBody,2);
-    setHedgeRows(oBody,2,HEDGE,null);setHedgeInfo("hedgeInfo",false,null,b);
     document.getElementById("cD1").textContent="—";document.getElementById("cD2").textContent="—";
     document.getElementById("mCall").textContent="—";document.getElementById("mPut").textContent="—";
     document.getElementById("beCall").textContent="—";document.getElementById("bePut").textContent="—";
@@ -528,25 +502,12 @@ function runOutright(b){
   // theta: long = negative/red (decay cost), short = positive/green
   setRow(oBody,5,[col(lot*c.thetaUnit*s,2),col(lot*p.thetaUnit*s,2)]);
 
-  // each column is its own trade, so each gets its own futures hedge
-  var HC=hedgeFor(dC*s), HP=hedgeFor(dP*s);
-  setHedgeRows(oBody,2,HEDGE,[HC,HP]);
-  setHedgeInfo("hedgeInfo",HEDGE,[HC,HP],b);
-
   var cITM=F>K,pITM=F<K;
   var mc=document.getElementById("mCall"),mp=document.getElementById("mPut");
   mc.textContent=cITM?"ITM":"OTM";mc.className="tag "+(cITM?"itm":"otm");
   mp.textContent=pITM?"ITM":"OTM";mp.className="tag "+(pITM?"itm":"otm");
-  if(HEDGE){
-    var mk=[K,F];
-    document.getElementById("beCall").textContent=
-      beText(hedgedZeros(function(S){return Math.max(S-K,0);},premC,lot,HC.h,F,s,mk));
-    document.getElementById("bePut").textContent=
-      beText(hedgedZeros(function(S){return Math.max(K-S,0);},premP,lot,HP.h,F,s,mk));
-  }else{
-    document.getElementById("beCall").textContent=num(K+premC,1);
-    document.getElementById("bePut").textContent=num(K-premP,1);
-  }
+  document.getElementById("beCall").textContent=num(K+premC,1);
+  document.getElementById("bePut").textContent=num(K-premP,1);
   document.getElementById("cD1").textContent=c.d1.toFixed(4);
   document.getElementById("cD2").textContent=c.d2.toFixed(4);
 
@@ -575,7 +536,6 @@ function runStruct(b){
   if(single){for(var i=1;i<=cfg.n;i++)Vs[i]=sv;}
   else{for(var i=1;i<=cfg.n;i++){Vs[i]=fnum("v"+i);if(!(Vs[i]>0))ok=false;}}
   if(!ok){dashTable(sBody,1);clearGVColors(sBody,1);
-    setHedgeRows(sBody,1,HEDGE,null);setHedgeInfo("hedgeInfo2",false,null,b);
     document.getElementById("netTag").textContent="—";document.getElementById("netTag").className="tag";
     document.getElementById("beStruct").textContent="—";LAST=null;return;}
 
@@ -600,10 +560,6 @@ function runStruct(b){
   setGVColors(sBody,1,sc,sc);
   setRow(sBody,5,[col(th*s,2)]);
 
-  var HS=hedgeFor(dl*s);
-  setHedgeRows(sBody,1,HEDGE,[HS]);
-  setHedgeInfo("hedgeInfo2",HEDGE,[HS],b);
-
   // cash flow after side: negative = you pay (debit), positive = you receive (credit)
   var cf=-s*premT;
   var nt=document.getElementById("netTag");
@@ -611,31 +567,13 @@ function runStruct(b){
   nt.className="tag "+(cf<0?"deb":"cr");
 
   // payoff net line + breakevens
-  var payFn=function(S){var pay=0;legsDef.forEach(function(L){
-    pay+=L.q*(L.cp==="C"?Math.max(S-Ks[L.k],0):Math.max(Ks[L.k]-S,0));});return pay;};
-  var hh=HEDGE?HS.h:0;
-  var netFn=function(S){return s*lot*(payFn(S)-premT)-hh*(S-F);};
-  LAST={mode:"struct",b,cfg,legsDef,Ks,Vs,premT,dl,gm,vg,th,strikes,netFn,payFn,H:HS};
+  var netFn=function(S){var pay=0;legsDef.forEach(function(L){
+    pay+=L.q*(L.cp==="C"?Math.max(S-Ks[L.k],0):Math.max(Ks[L.k]-S,0));});
+    return s*(pay-premT);};
+  LAST={mode:"struct",b,cfg,legsDef,Ks,Vs,premT,dl,gm,vg,th,strikes,netFn};
   document.getElementById("beStruct").textContent=beText(findBEs(netFn,strikes.concat([F])));
 }
 
-/* hedge rows live at the bottom of both tables; hidden unless HEDGE is on */
-function setHedgeRows(body,ncols,on,Hs){
-  var rows=body.querySelectorAll("tr"),n=rows.length;
-  [n-2,n-1].forEach(function(ri){rows[ri].classList.toggle("hide",!on);});
-  if(!on)return;
-  var ph='<span class="ph">&mdash;</span>';
-  if(!Hs){setRow(body,n-2,ncols===2?[ph,ph]:[ph]);setRow(body,n-1,ncols===2?[ph,ph]:[ph]);return;}
-  setRow(body,n-2,Hs.map(colHedge));
-  setRow(body,n-1,Hs.map(function(H){return col(H.res,3);}));
-}
-function setHedgeInfo(id,on,Hs,b){
-  var el=document.getElementById(id);
-  el.classList.toggle("hide",!on||!Hs);
-  if(!on||!Hs)return;
-  var t=Hs.map(function(H){return num(Math.abs(H.h)*b.tonnes,0)+"t";}).join(" / ");
-  el.innerHTML="hedged "+t+" @ <b>"+num(b.F,0)+"</b>";
-}
 function showExpWarn(b){
   var w=document.getElementById("expWarn"),bad=isFinite(b.dte)&&b.dte<=0&&!isNaN(b.exp);
   w.classList.toggle("hide",!bad);
@@ -702,17 +640,8 @@ function ticketOutright(which){
   o.push(padR("Gamma",W)+num(L.g*s,4));
   o.push(padR("Vega",W)+num(L.vg*s,2));
   o.push(padR("Theta",W)+num(th,2));
-  if(HEDGE){
-    var H=hedgeFor(d*s);
-    o.push("");
-    o.push(padR("Hedge",W)+(H.h===0?"flat":H.txt+" lots ("+num(Math.abs(H.h)*b.tonnes,0)+"t) @ "+num(b.F,0)));
-    o.push(padR("Residual",W)+num(H.res,3)+" lots");
-    be=hedgedZeros(isC?function(S){return Math.max(S-L.K,0);}:function(S){return Math.max(L.K-S,0);},
-      prem,b.lots,H.h,b.F,s,[L.K,b.F]);
-  }
   o.push("");
-  o.push(HEDGE?(padR("Breakeven",W)+beText(be)+"   (hedged)")
-              :(padR("Breakeven",W)+padR(num(be,1),11)+"("+(itm?"ITM":"OTM")+")"));
+  o.push(padR("Breakeven",W)+padR(num(be,1),11)+"("+(itm?"ITM":"OTM")+")");
   o.push(padR("Expiry",W)+expStr(b)+" · "+b.dte+" DTE");
   return o.join("\n");
 }
@@ -755,13 +684,8 @@ function ticketStruct(){
   o.push(padR("Gamma",W)+num(L.gm*s,4));
   o.push(padR("Vega",W)+num(L.vg*s,2));
   o.push(padR("Theta",W)+num(L.th*s,2));
-  if(HEDGE&&L.H){
-    o.push("");
-    o.push(padR("Hedge",W)+(L.H.h===0?"flat":L.H.txt+" lots ("+num(Math.abs(L.H.h)*b.tonnes,0)+"t) @ "+num(b.F,0)));
-    o.push(padR("Residual",W)+num(L.H.res,3)+" lots");
-  }
   o.push("");
-  o.push(padR("Breakeven",W)+beText(findBEs(L.netFn,L.strikes.concat([b.F])))+(HEDGE?"   (hedged)":""));
+  o.push(padR("Breakeven",W)+beText(findBEs(L.netFn,L.strikes.concat([b.F]))));
   o.push(padR("Expiry",W)+expStr(b)+" · "+b.dte+" DTE");
   return o.join("\n");
 }
@@ -869,7 +793,7 @@ document.getElementById("pricingdate").value=new Date().toISOString().substring(
 
 var IDS=["forwardPrice","k1","v1","k2","v2","k3","v3","q1","q2","q3","interestRate","lots","month"];
 
-function save(){try{var o={metal:document.querySelector("#metalSeg button.on").dataset.m,side:SIDE,struct:STRUCT,cp:CP,volmode:VOLMODE,ratemode:RATEMODE,hedge:HEDGE};
+function save(){try{var o={metal:document.querySelector("#metalSeg button.on").dataset.m,side:SIDE,struct:STRUCT,cp:CP,volmode:VOLMODE,ratemode:RATEMODE};
   IDS.forEach(function(id){o[id]=$v(id);});localStorage.setItem("lmePricer2",JSON.stringify(o));}catch(e){}}
 function load(){try{var o=JSON.parse(localStorage.getItem("lmePricer2")||"{}");
   IDS.forEach(function(id){if(o[id]!=null&&o[id]!=="")document.getElementById(id).value=o[id];});
@@ -879,19 +803,10 @@ function load(){try{var o=JSON.parse(localStorage.getItem("lmePricer2")||"{}");
   if(o.volmode)VOLMODE=o.volmode;
   document.querySelectorAll("#volSeg button").forEach(function(b){b.classList.toggle("on",b.dataset.vm===VOLMODE);});
   if(o.ratemode)RATEMODE=o.ratemode; setRateMode(RATEMODE,false);
-  setHedge(!!o.hedge,false);
   setStruct(o.struct||"outright",false);
 }catch(e){setStruct("outright",false);}}
 
 document.getElementById("structSel").addEventListener("change",function(){setStruct(this.value,true);});
-function setHedge(on,fire){
-  HEDGE=on;
-  ["hedgeBtn1","hedgeBtn2"].forEach(function(id){
-    document.getElementById(id).classList.toggle("on",on);});
-  if(fire){run();save();}
-}
-["hedgeBtn1","hedgeBtn2"].forEach(function(id){
-  document.getElementById(id).addEventListener("click",function(){setHedge(!HEDGE,true);});});
 document.getElementById("copyBtn1").addEventListener("click",openCopy);
 document.getElementById("copyBtn2").addEventListener("click",openCopy);
 document.getElementById("copyClose").addEventListener("click",closeCopy);
